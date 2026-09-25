@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clinic Revenue OS — דמו מכירה</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">💎</div>
+      <div><b>Clinic Revenue OS</b><small id="clinic-name">קליניקה לדוגמה</small></div>
+    </div>
+    <button class="nav-item active" data-screen="dashboard">📊 דשבורד</button>
+    <button class="nav-item" data-screen="leads">🧲 לידים</button>
+    <button class="nav-item" data-screen="tasks">✅ משימות ופולואפ <span class="badge">0</span></button>
+    <button class="nav-item" data-screen="calendar">📅 יומן וייעוצים</button>
+    <button class="nav-item" data-screen="revenue">💰 הכנסות והמרות</button>
+    <button class="nav-item" data-screen="settings">⚙️ הגדרות</button>
+    <button class="tour-launch" id="tour-launch-btn">🎯 סיור מודרך למכירה</button>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <input type="search" placeholder="🔍 חיפוש שם / טלפון...">
+      <button class="btn btn-primary">+ ליד חדש</button>
+      <div class="who">
+        <span>דנה כהן · בעלת קליניקה</span>
+        <span class="avatar" style="background:#7c5cff">דכ</span>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ Dashboard ============ -->
+      <section class="screen active" id="screen-dashboard">
+        <h1 class="page-title">דשבורד</h1>
+        <div class="page-sub">איפה אני מאבדת הכנסה, ומה הצוות צריך לעשות היום?</div>
+        <div class="kpi-grid" id="kpi-grid"></div>
+        <div class="panel">
+          <h3>⚡ פעולות דחופות להיום</h3>
+          <div class="urgent-list" id="urgent-list"></div>
+        </div>
+      </section>
+
+      <!-- ============ Leads ============ -->
+      <section class="screen" id="screen-leads">
+        <h1 class="page-title">לידים</h1>
+        <div class="page-sub">מי בצנרת, ובאיזה שלב?</div>
+        <div class="filters-row">
+          <button class="btn btn-primary leads-view-btn" data-view="kanban">Kanban</button>
+          <button class="btn leads-view-btn" data-view="table">טבלה</button>
+          <select id="filter-source"></select>
+          <select id="filter-owner"></select>
+        </div>
+        <div id="kanban-wrap"><div class="kanban" id="kanban"></div></div>
+        <div id="leads-table-wrap" style="display:none"></div>
+      </section>
+
+      <!-- ============ Tasks ============ -->
+      <section class="screen" id="screen-tasks">
+        <h1 class="page-title">משימות ופולואפ</h1>
+        <div class="page-sub">מה עושים עכשיו?</div>
+        <div class="task-tabs" id="task-tabs"></div>
+        <div id="task-list"></div>
+      </section>
+
+      <!-- ============ Calendar ============ -->
+      <section class="screen" id="screen-calendar">
+        <h1 class="page-title">יומן וייעוצים</h1>
+        <div class="page-sub">מי מגיעה, ומתי?</div>
+        <div id="calendar-list"></div>
+      </section>
+
+      <!-- ============ Revenue ============ -->
+      <section class="screen" id="screen-revenue">
+        <h1 class="page-title">הכנסות והמרות</h1>
+        <div class="page-sub">מה מכניס כסף, ומה דולף?</div>
+        <div class="panel">
+          <h3>Funnel</h3>
+          <div class="funnel" id="funnel"></div>
+        </div>
+        <div class="two-col">
+          <div class="panel"><h3>הכנסה לפי מקור</h3><div id="rev-by-source"></div></div>
+          <div class="panel"><h3>הכנסה לפי טיפול</h3><div id="rev-by-treatment"></div></div>
+        </div>
+        <div class="two-col">
+          <div class="panel"><h3>הכנסה לפי איש צוות</h3><div id="rev-by-owner"></div></div>
+          <div class="panel"><h3>סיבות אובדן</h3><div id="lost-reasons"></div></div>
+        </div>
+        <div class="panel">
+          <h3>🔴 כסף בסיכון</h3>
+          <div id="at-risk"></div>
+        </div>
+      </section>
+
+      <!-- ============ Settings ============ -->
+      <section class="screen" id="screen-settings">
+        <h1 class="page-title">הגדרות</h1>
+        <div class="page-sub">איך מתאימים את המערכת לקליניקה?</div>
+        <div class="settings-grid">
+          <div class="settings-nav" id="settings-nav"></div>
+          <div class="panel" id="settings-content"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ Lead / Customer modal ============ -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script src="tour.js"></script>
+</body>
+</html>
