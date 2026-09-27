@@ -26,8 +26,12 @@ const OVERPASS_ENDPOINTS = [
 ];
 
 // עסקי יופי/בריאות אסתטית בישראל — תיוגי OSM רלוונטיים
+// timeout נמוך + הגבלת תוצאות בכוונה: Supabase Edge Functions מגבילות זמן
+// ריצה, ושרתי Overpass הציבוריים יכולים להיות איטיים — עדיף להיכשל מהר
+// ולעבור ל-mirror הבא מאשר לתקוע את הפונקציה עד שהיא נחתכת (WORKER_RESOURCE_LIMIT).
+const OVERPASS_TIMEOUT_MS = 15000;
 const OVERPASS_QUERY = `
-[out:json][timeout:50];
+[out:json][timeout:12];
 area["ISO3166-1"="IL"][admin_level=2]->.il;
 (
   nwr["shop"="beauty"](area.il);
@@ -36,7 +40,7 @@ area["ISO3166-1"="IL"][admin_level=2]->.il;
   nwr["amenity"="spa"](area.il);
   nwr["leisure"="spa"](area.il);
 );
-out center tags 200;
+out center tags 80;
 `;
 
 function normalizePhone(raw: string | null | undefined): string | null {
@@ -59,6 +63,7 @@ async function fetchOverpass(): Promise<any[]> {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: OVERPASS_QUERY,
+        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
       });
       if (!res.ok) throw new Error(`Overpass HTTP ${res.status}: ${await res.text()}`);
       const json = await res.json();
