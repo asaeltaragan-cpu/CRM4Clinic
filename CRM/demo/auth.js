@@ -5,14 +5,8 @@
   'use strict';
   const $ = (s) => document.querySelector(s);
 
-  // רשימת המשתמשים שנוצרו ע"י seed.mjs (מידע ציבורי לא רגיש — חשבונות דמו סינתטיים)
-  const DEMO_ACCOUNTS = [
-    { email: 'dana.cohen@demo.crm4clinic.local', role: 'בעלת קליניקה' },
-    { email: 'michal.levi@demo.crm4clinic.local', role: 'מנהלת' },
-    { email: 'noa.mizrahi@demo.crm4clinic.local', role: 'מזכירה/נציגה' },
-    { email: 'shir.bendavid@demo.crm4clinic.local', role: 'מזכירה/נציגה' },
-    { email: 'liat.avraham@demo.crm4clinic.local', role: 'מטפלת' },
-  ];
+  // הערה: פרטי ההתחברות (מיילים + סיסמה) לא מוצגים כאן בכוונה — הדמו הזה
+  // עלול להיות פרוס ציבורית (GitHub Pages). מסרו את הפרטים בפועל בערוץ פרטי.
   const ROLE_LABEL = { owner: 'בעלת קליניקה', manager: 'מנהלת', sales: 'מזכירה/נציגה', therapist: 'מטפלת' };
   const initials = (name) => (name || '').split(' ').map((p) => p[0]).slice(0, 2).join('');
 
@@ -47,8 +41,6 @@
   }
 
   function init(supabase) {
-    $('#login-demo-users').innerHTML = DEMO_ACCOUNTS.map((a) => `<div>${a.email} — ${a.role}</div>`).join('');
-
     $('#login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       $('#login-error').style.display = 'none';

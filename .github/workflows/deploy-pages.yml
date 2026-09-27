@@ -25,6 +25,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Generate config.js (Supabase anon key — safe to publish, kept out of source)
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+        run: |
+          cat > CRM/demo/config.js <<EOF
+          window.SUPABASE_CONFIG = { url: '${SUPABASE_URL}', anonKey: '${SUPABASE_ANON_KEY}' };
+          EOF
       - name: Upload demo as Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
