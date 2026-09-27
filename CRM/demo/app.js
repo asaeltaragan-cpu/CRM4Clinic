@@ -536,6 +536,66 @@
     clearTimeout(toast._h); toast._h = setTimeout(() => t.style.opacity = '0', 2200);
   }
 
+  // ---------------- Supabase live leads (Apify sync) ----------------
+  function fmtSyncTime(d) {
+    if (!d) return 'מעולם לא';
+    return new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  async function callSyncFunction(method) {
+    const url = window.SUPABASE_FUNCTION_URL && window.SUPABASE_FUNCTION_URL('sync-apify-leads');
+    const cfg = window.SUPABASE_CONFIG;
+    if (!url || !cfg) throw new Error('Supabase לא מוגדר');
+    const res = await fetch(url, {
+      method,
+      headers: { Authorization: 'Bearer ' + cfg.anonKey, apikey: cfg.anonKey, 'Content-Type': 'application/json' },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || body.success === false) throw new Error(body.error || ('HTTP ' + res.status));
+    return body;
+  }
+  function renderLiveLeadsList(leads) {
+    const list = $('#live-leads-list');
+    if (!leads || !leads.length) { list.innerHTML = '<div class="empty-hint">עדיין אין לידים מ-Google Maps. לחצו "משוך לידים חדשים".</div>'; return; }
+    list.innerHTML = leads.map(l => `
+      <div class="urgent-row" style="cursor:default">
+        <span class="dot blue"></span>
+        <span class="txt"><b>${l.full_name}</b> · ${l.phone} ${l.notes ? '· ' + l.notes : ''}</span>
+        <span class="pill" style="background:#eaf0ff;color:var(--blue)">Google Maps</span>
+      </div>`).join('');
+  }
+  async function loadLiveLeads() {
+    try {
+      const body = await callSyncFunction('GET');
+      $('#live-leads-panel').style.display = 'block';
+      renderLiveLeadsList(body.leads);
+      const ls = body.lastSync;
+      $('#sync-status').textContent = ls
+        ? `עודכן לאחרונה: ${fmtSyncTime(ls.finished_at || ls.started_at)} · ${ls.status === 'success' ? `${ls.leads_upserted} חדשים` : ls.status === 'error' ? 'שגיאה' : 'רץ...'}`
+        : 'עדיין לא בוצע סנכרון';
+    } catch (e) {
+      console.warn('loadLiveLeads failed:', e.message || e);
+    }
+  }
+  async function runSync() {
+    const btn = $('#sync-leads-btn');
+    btn.disabled = true; btn.textContent = '🔄 מסנכרן...';
+    $('#sync-status').textContent = 'מסנכרן מול Apify (עד כדקה)...';
+    try {
+      const body = await callSyncFunction('POST');
+      toast(`✔ הסנכרון הושלם: ${body.leads_upserted} לידים חדשים (${body.leads_skipped} כבר היו קיימים)`);
+      await loadLiveLeads();
+    } catch (e) {
+      toast('שגיאת סנכרון: ' + (e.message || e));
+      $('#sync-status').textContent = 'שגיאת סנכרון — ראו קונסולה';
+    } finally {
+      btn.disabled = false; btn.textContent = '🔄 משוך לידים חדשים';
+    }
+  }
+  function initSupabaseLeadsPanel() {
+    $('#sync-leads-btn').addEventListener('click', runSync);
+    loadLiveLeads();
+  }
+
   // ---------------- Init ----------------
   function init() {
     $('#clinic-name').textContent = D.clinicName;
@@ -552,6 +612,7 @@
     renderAll();
     go('dashboard');
     window.CRM = { go, openLeadModal, openCustomerModal, computeKpis, D };
+    window.addEventListener('supabase-ready', initSupabaseLeadsPanel);
   }
   document.addEventListener('DOMContentLoaded', init);
 })();

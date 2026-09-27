@@ -57,6 +57,17 @@
         </div>
         <div id="kanban-wrap"><div class="kanban" id="kanban"></div></div>
         <div id="leads-table-wrap" style="display:none"></div>
+
+        <div class="panel" id="live-leads-panel" style="display:none;margin-top:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <h3 style="margin:0">🔌 לידים חיים מ-Google Maps (Supabase)</h3>
+              <div class="page-sub" id="sync-status" style="margin:2px 0 0">טוען…</div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="sync-leads-btn">🔄 משוך לידים חדשים</button>
+          </div>
+          <div id="live-leads-list" style="margin-top:10px"></div>
+        </div>
       </section>
 
       <!-- ============ Tasks ============ -->

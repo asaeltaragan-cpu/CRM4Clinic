@@ -29,3 +29,7 @@ python -m http.server 8080
 1. עקבו אחר [../supabase/README.md](../supabase/README.md) ליצירת פרויקט Supabase, הרצת הסכמה וזריעת נתונים.
 2. העתיקו את `config.example.js` ל-`config.js` (לא ב-git) ומלאו Project URL + anon key.
 3. רעננו את הדמו — badge קטן ליד שם המשתמשת בסרגל העליון יראה "🔌 מחובר ל-Supabase · X לידים ב-DB" (קריאה אמיתית ל-DB). בלי `config.js`, הדמו ממשיך לעבוד רגיל על `data.js` בלי שום שינוי, וללא badge.
+
+### לידים חיים מ-Google Maps (Apify → Supabase → מסך הלידים)
+
+כשה-Supabase מחובר, בתחתית מסך **לידים** מופיע פאנל "🔌 לידים חיים מ-Google Maps": רשימת לידים אמיתיים שנשלפו מ-Apify ונשמרו ב-DB, כפתור **"🔄 משוך לידים חדשים"** להרצה יזומה, ותצוגת "עודכן לאחרונה" מבוססת `sync_logs`. סנכרון אוטומטי נוסף רץ פעם ביום דרך GitHub Actions. פרטים מלאים על ההקמה (Edge Function + מיגרציה + Action): [../supabase/README.md](../supabase/README.md#שלב-5--סנכרון-לידים-אוטומטי-מ-apify-google-maps).
