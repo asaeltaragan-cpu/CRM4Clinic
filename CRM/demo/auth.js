@@ -41,32 +41,60 @@
   }
 
   function init(supabase) {
-    $('#login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      $('#login-error').style.display = 'none';
-      const email = $('#login-email').value.trim();
-      const password = $('#login-password').value;
-      const btn = e.target.querySelector('button[type=submit]');
-      btn.disabled = true; btn.textContent = 'מתחבר/ת...';
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      btn.disabled = false; btn.textContent = 'התחבר/י';
-      if (error) { showLoginError('התחברות נכשלה: ' + error.message); return; }
-      await loadProfileAndEnter(supabase, data.user.id);
-    });
+    // כל שלב מבודד ב-try/catch משלו: כשל בהרשמת מאזין אחד (למשל אלמנט
+    // שעדיין לא קיים ב-DOM) לא יחסום את הצגת מסך ההתחברות — זה הדבר
+    // הכי חשוב שחייב לקרות תמיד.
+    try {
+      $('#login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        $('#login-error').style.display = 'none';
+        const email = $('#login-email').value.trim();
+        const password = $('#login-password').value;
+        const btn = e.target.querySelector('button[type=submit]');
+        btn.disabled = true; btn.textContent = 'מתחבר/ת...';
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) { showLoginError('התחברות נכשלה: ' + error.message); return; }
+          await loadProfileAndEnter(supabase, data.user.id);
+        } catch (err) {
+          console.error('[auth] login submit failed:', err);
+          showLoginError('שגיאה בלתי צפויה בהתחברות: ' + (err.message || err));
+        } finally {
+          btn.disabled = false; btn.textContent = 'התחבר/י';
+        }
+      });
+    } catch (err) { console.error('[auth] failed to wire login form:', err); }
 
-    $('#logout-btn').addEventListener('click', async () => {
-      await supabase.auth.signOut();
-      window.AUTH = null;
-      $('#topbar-who-authed').style.display = 'none';
-      window.dispatchEvent(new Event('auth-signed-out'));
-      showLogin();
-    });
+    try {
+      $('#logout-btn').addEventListener('click', async () => {
+        try {
+          await supabase.auth.signOut();
+        } finally {
+          window.AUTH = null;
+          $('#topbar-who-authed').style.display = 'none';
+          window.dispatchEvent(new Event('auth-signed-out'));
+          showLogin();
+        }
+      });
+    } catch (err) { console.error('[auth] failed to wire logout button:', err); }
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) loadProfileAndEnter(supabase, data.session.user.id);
-      else showLogin();
-    });
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (data.session) return loadProfileAndEnter(supabase, data.session.user.id);
+        showLogin();
+      })
+      .catch((err) => {
+        console.error('[auth] getSession failed:', err);
+        showLogin();
+      });
   }
 
-  window.addEventListener('supabase-ready', (e) => init(e.detail.supabase));
+  window.addEventListener('supabase-ready', (e) => {
+    try {
+      init(e.detail.supabase);
+    } catch (err) {
+      console.error('[auth] init() threw synchronously:', err);
+      showLogin();
+    }
+  });
 })();
