@@ -616,11 +616,80 @@
     $('#db-leads-panel').style.display = 'none';
   }
 
+  // ---------------- ליד חדש (כפתור בסרגל העליון) ----------------
+  async function openNewLeadModal() {
+    if (window.AUTH && dbState.stages.length === 0) { try { await loadDbLeadsData(); } catch (e) {} }
+    const sel = $('#nl-source');
+    sel.innerHTML = window.AUTH
+      ? dbState.sources.map(s => `<option value="${s.id}">${s.name}</option>`).join('')
+      : D.SOURCES.map(s => `<option value="${s.id}">${s.icon} ${s.name}</option>`).join('');
+    $('#new-lead-form').reset();
+    $('#new-lead-error').style.display = 'none';
+    $('#new-lead-overlay').classList.add('open');
+    $('#nl-name').focus();
+  }
+  function closeNewLeadModal() { $('#new-lead-overlay').classList.remove('open'); }
+
+  async function submitNewLead(e) {
+    e.preventDefault();
+    const full_name = $('#nl-name').value.trim();
+    const phone = $('#nl-phone').value.trim();
+    const source_id = $('#nl-source').value || null;
+    const expected_value = Number($('#nl-value').value) || 0;
+    const notes = $('#nl-notes').value.trim();
+    const errEl = $('#new-lead-error');
+    errEl.style.display = 'none';
+    if (!full_name || !phone) return;
+
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'שומר...';
+    try {
+      if (window.AUTH) {
+        const stage = dbState.stages.slice().sort((a, b) => a.position - b.position)[0];
+        const { error } = await window.supabaseClient.from('leads').insert({
+          clinic_id: window.AUTH.profile.clinic_id,
+          full_name, phone, source_id, stage_id: stage.id,
+          expected_value, response_status: 'none', notes: notes || null,
+        });
+        if (error) throw error;
+        toast('✔ הליד נשמר ב-DB');
+        await loadDbLeadsData();
+      } else {
+        D.leads.unshift({
+          id: 'L' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+          full_name, phone, email: null,
+          source_id: source_id || D.SOURCES[0].id,
+          treatment_id: D.TREATMENTS[0].id,
+          stage_id: 1, owner_id: D.STAFF.find(s => s.role === 'sales').id,
+          expected_value, response_status: 'none',
+          first_response_at: null, next_action: 'לחזור ללידה (SLA 15 דק׳)',
+          next_action_at: new Date(Date.now() + 15 * 60000),
+          lost_reason: null, created_at: new Date(), notes: notes || '',
+        });
+        toast('✔ הליד נוסף (דמו מקומי)');
+        renderLeadsScreen();
+        renderDashboard();
+        updateNavBadges();
+      }
+      closeNewLeadModal();
+    } catch (err) {
+      errEl.textContent = 'שגיאה בשמירה: ' + (err.message || err);
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'שמור ליד';
+    }
+  }
+
   // ---------------- Init ----------------
   function init() {
     $('#clinic-name').textContent = D.clinicName;
     $$('.nav-item[data-screen]').forEach(btn => btn.addEventListener('click', () => go(btn.dataset.screen)));
     $('#modal-backdrop').addEventListener('click', (e) => { if (e.target.id === 'modal-backdrop') closeModal(); });
+    $('#new-lead-btn').addEventListener('click', openNewLeadModal);
+    $('#new-lead-close').addEventListener('click', closeNewLeadModal);
+    $('#new-lead-cancel').addEventListener('click', closeNewLeadModal);
+    $('#new-lead-overlay').addEventListener('click', (e) => { if (e.target.id === 'new-lead-overlay') closeNewLeadModal(); });
+    $('#new-lead-form').addEventListener('submit', submitNewLead);
     $('#filter-source').addEventListener('change', (e) => { leadFilters.source = e.target.value; renderLeadsScreen(); });
     $('#filter-owner').addEventListener('change', (e) => { leadFilters.owner = e.target.value; renderLeadsScreen(); });
     $$('.leads-view-btn').forEach(b => b.addEventListener('click', () => {
