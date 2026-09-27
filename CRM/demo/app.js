@@ -529,11 +529,11 @@
     if (badge) badge.textContent = overdue;
   }
 
-  function toast(msg) {
+  function toast(msg, duration) {
     let t = $('#toast');
-    if (!t) { t = el(`<div id="toast" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f2430;color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;z-index:300;opacity:0;transition:.2s"></div>`); document.body.appendChild(t); }
+    if (!t) { t = el(`<div id="toast" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);max-width:90vw;background:#1f2430;color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;z-index:300;opacity:0;transition:.2s"></div>`); document.body.appendChild(t); }
     t.textContent = msg; t.style.opacity = '1';
-    clearTimeout(toast._h); toast._h = setTimeout(() => t.style.opacity = '0', 2200);
+    clearTimeout(toast._h); toast._h = setTimeout(() => t.style.opacity = '0', duration || 2200);
   }
 
   // ---------------- לידים אמיתיים מה-DB (אחרי התחברות) ----------------
@@ -541,6 +541,7 @@
   // RLS דואג לבידוד. שתי הפונקציות (sync-apify-leads / sync-osm-leads)
   // נשארות רק לכתיבה (POST) — מריצות סנכרון חדש מול המקור החיצוני.
   const dbState = { stages: [], sources: [], leads: [] };
+  const dbFilters = { source: '' };
 
   function fmtSyncTime(d) {
     if (!d) return 'מעולם לא';
@@ -561,14 +562,25 @@
     const lastOsm = (logs || []).find(l => l.source === 'osm_overpass');
     const part = (label, l) => l ? `${label}: ${fmtSyncTime(l.finished_at || l.started_at)}${l.status === 'success' ? ` (${l.leads_upserted} חדשים)` : l.status === 'error' ? ' — שגיאה' : ' — רץ...'}` : `${label}: מעולם לא`;
     $('#db-leads-status').textContent = `${dbState.leads.length} לידים בסה"כ · ${part('Google Maps', lastGmaps)} · ${part('OSM', lastOsm)}`;
+    renderDbSourceFilterOptions();
     renderDbLeadsTable();
+  }
+  function renderDbSourceFilterOptions() {
+    const sel = $('#db-source-filter');
+    const current = dbFilters.source;
+    sel.innerHTML = '<option value="">כל המקורות</option>' +
+      dbState.sources.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    // שמירת הבחירה הקודמת אם המקור עדיין קיים (אחרי רענון)
+    if (current && dbState.sources.some(s => s.id === current)) sel.value = current;
+    else dbFilters.source = sel.value = '';
   }
   function renderDbLeadsTable() {
     const sourceName = (id) => (dbState.sources.find(s => s.id === id) || {}).name || '—';
+    const leads = dbFilters.source ? dbState.leads.filter(l => l.source_id === dbFilters.source) : dbState.leads;
     $('#db-leads-table-wrap').innerHTML = `
       <table class="data-table">
         <thead><tr><th>שם</th><th>טלפון</th><th>מקור</th><th>שלב</th><th>שווי</th><th>נוצר</th></tr></thead>
-        <tbody>${dbState.leads.map(l => `
+        <tbody>${leads.map(l => `
           <tr>
             <td>${l.full_name}</td>
             <td>${l.phone}</td>
@@ -576,7 +588,7 @@
             <td><select data-lead="${l.id}" class="db-stage-select">${dbState.stages.map(s => `<option value="${s.id}" ${s.id === l.stage_id ? 'selected' : ''}>${s.name}</option>`).join('')}</select></td>
             <td>${l.expected_value ? fmtMoney(l.expected_value) : '—'}</td>
             <td>${fmtDate(l.created_at)}</td>
-          </tr>`).join('') || '<tr><td colspan="6"><div class="empty-hint">אין עדיין לידים ב-DB</div></td></tr>'}</tbody>
+          </tr>`).join('') || `<tr><td colspan="6"><div class="empty-hint">${dbFilters.source ? 'אין לידים מהמקור הזה' : 'אין עדיין לידים ב-DB'}</div></td></tr>`}</tbody>
       </table>`;
     $$('#db-leads-table-wrap .db-stage-select').forEach((sel) => sel.addEventListener('change', async () => {
       const { error } = await window.supabaseClient.from('leads').update({ stage_id: sel.value }).eq('id', sel.dataset.lead);
@@ -591,16 +603,25 @@
       const cfg = window.SUPABASE_CONFIG;
       const url = window.SUPABASE_FUNCTION_URL(functionName);
       const { data: { session } } = await window.supabaseClient.auth.getSession();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + (session ? session.access_token : cfg.anonKey), apikey: cfg.anonKey },
-      });
+      const notDeployedMsg = `הפונקציה "${functionName}" עדיין לא פרוסה בסופאבייס (או שאין רשת). הריצו: supabase functions deploy ${functionName} (ראו CRM/supabase/README.md שלב 5).`;
+      let res;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + (session ? session.access_token : cfg.anonKey), apikey: cfg.anonKey },
+        });
+      } catch (networkErr) {
+        // פונקציה שלא פרוסה מחזירה 404 ברמת הפלטפורמה בלי CORS headers —
+        // הדפדפן חוסם את זה כ-"Failed to fetch" בלי לחשוף סטטוס כלל.
+        throw new Error(notDeployedMsg);
+      }
+      if (res.status === 404) throw new Error(notDeployedMsg);
       const body = await res.json().catch(() => ({}));
       if (!res.ok || body.success === false) throw new Error(body.error || ('HTTP ' + res.status));
       toast(`✔ ${label}: ${body.leads_upserted} לידים חדשים (${body.leads_skipped} כבר היו קיימים)`);
       await loadDbLeadsData();
     } catch (e) {
-      toast(`שגיאת סנכרון (${label}): ` + (e.message || e));
+      toast(`שגיאת סנכרון (${label}): ` + (e.message || e), 6000);
     } finally {
       btn.disabled = false; btn.textContent = orig;
     }
@@ -610,6 +631,7 @@
     $('#gmaps-sync-btn').onclick = () => runDbSync('sync-apify-leads', 'Google Maps', 'gmaps-sync-btn');
     $('#osm-sync-btn').onclick = () => runDbSync('sync-osm-leads', 'OpenStreetMap', 'osm-sync-btn');
     $('#db-refresh-btn').onclick = () => loadDbLeadsData();
+    $('#db-source-filter').onchange = (e) => { dbFilters.source = e.target.value; renderDbLeadsTable(); };
     loadDbLeadsData();
   }
   function teardownDbLeadsPanel() {
