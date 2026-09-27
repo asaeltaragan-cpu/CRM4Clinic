@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "seed": "node seed.mjs"
+    "seed": "node seed.mjs",
+    "set-passwords": "node set-demo-passwords.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

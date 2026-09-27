@@ -36,7 +36,7 @@
 ### 2.2 איך הם מאוחסנים ונשמרים
 
 ```
-Apify / Overpass  →  Edge Function (Deno, Supabase)  →  טבלת leads  →  מסך הלידים בדמו
+Apify / Overpass  →  Edge Function (Deno, Supabase, POST בלבד)  →  טבלת leads  →  מסך הלידים בדמו (משתמש מחובר)
                               │
                               └──→  טבלת sync_logs (רישום כל הרצה)
 ```
@@ -44,18 +44,30 @@ Apify / Overpass  →  Edge Function (Deno, Supabase)  →  טבלת leads  → 
 1. **ה-Edge Function** (`sync-apify-leads` או `sync-osm-leads`) שולפת את הנתונים הגולמיים מהמקור, מנרמלת טלפון לפורמט E.164 (`+972...`), ומרכיבה שורת ליד: `full_name`, `phone`, `source_id` (מצביע ל-`lead_sources` — "Google Maps" או "OpenStreetMap"), `stage_id` (תמיד השלב הראשון, "ליד חדש"), `notes` (קטגוריה + כתובת).
 2. **מניעת כפילויות**: לפני הכנסה, ה-Function בודקת אילו טלפונים כבר קיימים בטבלת `leads` עבור הקליניקה (`unique (clinic_id, phone)` בסכמה), ומכניסה **רק לידים חדשים** — לידים קיימים לעולם לא נדרסים, גם אם השלב שלהם השתנה בינתיים ע"י נציגה.
 3. **טבלת `sync_logs`** מקבלת שורה בכל הרצה: `source` (`apify_google_maps` / `osm_overpass`), `started_at`, `finished_at`, `status` (`running`/`success`/`error`), `leads_upserted`, `leads_skipped`, `message`. זה מה שמאפשר תצוגת "עודכן לאחרונה" בדמו.
-4. **הצגה במסך הלידים**: מכיוון שמפתח ה-`anon` (בדפדפן) חסום ע"י RLS מלקרוא ישירות מ-`leads`, הדמו **תמיד** קורא דרך אותה Edge Function (`GET` במקום קריאה ישירה לטבלה) — ה-Function משתמשת ב-`service_role` בצד השרת בלבד ומחזירה רק שדות בטוחים.
+4. **הצגה במסך הלידים**: הפונקציות עצמן **לא** חושפות קריאה יותר (הוסר ה-`GET` שהיה בהן קודם, לפני שהתווסף ניהול משתמשים) — משתמש מחובר בדמו קורא **ישירות** מטבלת `leads` עם ה-session שלו, ו-RLS דואג לבידוד הנכון לפי קליניקה ותפקיד. זה גם מדויק יותר (RLS אמיתי, לא bypass דרך service_role) וגם פשוט יותר. ראו סעיף 3 (ניהול משתמשים) להרחבה.
 
 ### 2.3 מתי הסנכרון רץ
 
-- **יזום ע"י המשתמש**: כפתור **"🔄 משוך לידים חדשים"** בכל אחד משני הפאנלים במסך הלידים בדמו (`gmaps-sync-btn` / `osm-sync-btn` ב-`index.html`) — קורא `POST` ל-Edge Function המתאימה.
-- **אוטומטי, פעם ביום**: `.github/workflows/sync-leads.yml` — GitHub Action עם `cron: '0 6 * * *'` (06:00 UTC), שקורא ל-**שני** ה-Functions (matrix job). אפשר גם להריץ ידנית מטאב Actions → Run workflow.
+- **יזום ע"י המשתמש המחובר**: כפתורי **"🔄 Google Maps"** / **"🔄 OpenStreetMap"** בפאנל "🗄️ לידים אמיתיים מה-DB" במסך הלידים (מוצג רק אחרי התחברות) — קוראים `POST` ל-Edge Function המתאימה, ואז מרעננים את הטבלה בקריאה ישירה.
+- **אוטומטי, פעם ביום**: `.github/workflows/sync-leads.yml` — GitHub Action עם `cron: '0 6 * * *'` (06:00 UTC), שקורא ל-**שני** ה-Functions (matrix job) עם ה-anon key (לא תלוי במשתמש מחובר — זו קריאת שרת-לשרת). אפשר גם להריץ ידנית מטאב Actions → Run workflow.
 
 ### 2.4 הוספת מקור לידים נוסף (אם יתבקש בעתיד)
 
 לפי אותה תבנית בדיוק (ראו את שני ה-Functions הקיימים כדוגמה):
-1. Edge Function חדשה תחת `CRM/supabase/functions/sync-<name>-leads/`, עם `GET` (קריאה, מסונן ל-`source_id` של המקור) ו-`POST` (סנכרון + upsert + `sync_logs`).
+1. Edge Function חדשה תחת `CRM/supabase/functions/sync-<name>-leads/`, `POST` בלבד (סנכרון + upsert + `sync_logs`; אין צורך ב-`GET` — הקריאה כבר עוברת ישירות מהטבלה, ראו 2.2).
 2. מיגרציה חדשה ב-`CRM/supabase/migrations/00N_<name>_lead_source.sql` שמוודאת קיום שורת `lead_sources` בשם המקור.
-3. הוספת `{ fn, prefix, label }` למערך `SYNC_SOURCES` ב-`CRM/demo/app.js`, ופאנל DOM תואם (`<prefix>-live-leads-panel` וכו') ב-`index.html`.
+3. הוספת כפתור נוסף ב-`db-leads-panel` (`index.html`) וקריאה מתאימה ל-`runDbSync(...)` ב-`CRM/demo/app.js`.
 4. הוספת שם ה-Function למטריצה ב-`.github/workflows/sync-leads.yml`.
 5. תיעוד ב-`CRM/supabase/README.md` (שלב 5) ובטבלה בסעיף 2.1 כאן.
+
+---
+
+## 3. ניהול משתמשים (Supabase Auth)
+
+הדמו כולל מסך התחברות אמיתי (`CRM/demo/auth.js`), פעיל רק כש-`config.js` מוגדר.
+
+- **5 חשבונות דמו** נוצרים ב-`seed.mjs` (בעלת קליניקה, מנהלת, 2 מזכירות/נציגות, מטפלת) כמשתמשי Supabase Auth אמיתיים, עם אימייל ASCII קבוע (`dana.cohen@demo.crm4clinic.local` וכו' — **לא** נגזר מהשם העברי, כדי להימנע מבעיות תאימות אימייל).
+- **סיסמה**: `seed.mjs` יוצר סיסמה אקראית שלא נשמרת. חייבים להריץ פעם אחת `npm run set-passwords` (מ-`CRM/supabase`) כדי לקבוע סיסמה ידועה (ברירת מחדל `Demo1234!`) — אחרת אף אחד לא יכול להתחבר. פרטי ההתחברות מוצגים גם במסך ההתחברות עצמו (מותר — חשבונות דמו סינתטיים, לא מידע רגיש).
+- **זרימה**: `auth.js` מאזין לאירוע `supabase-ready` (מ-`supabaseClient.js`), בודק session קיים, ואם אין — מציג את מסך ההתחברות. אחרי `signInWithPassword` מוצלח, טוען את שורת הפרופיל מ-`users`, ומשגר אירוע `auth-ready` שעליו `app.js` מאזין כדי לפתוח את פאנל הלידים האמיתי (`initDbLeadsPanel`). התנתקות משגרת `auth-signed-out` (`teardownDbLeadsPanel`).
+- **חשוב לזכור**: `supabase-ready` משוגר מיד אחרי יצירת ה-client (לא תלוי בהצלחת שום שאילתה) — אל תוסיפו תלות בין אתחול האימות לבין בדיקת badge כלשהי, כדי שמסך ההתחברות תמיד יעלה גם אם טבלה ספציפית לא זמינה כרגע.
+- **פרויקט Supabase "נרדם"**: בטיר החינמי, פרויקט לא פעיל כשבוע נכנס למצב מושהה ולוקח זמן להתעורר בפעם הבאה שפונים אליו (ולעיתים כמה בקשות ראשונות נכשלות עם שגיאת "table not found in schema cache" עד שהוא מתייצב). זה לא קשור לקוד — נסו שוב אחרי דקה, או בדקו את הדשבורד.

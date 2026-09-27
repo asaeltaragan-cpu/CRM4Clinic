@@ -26,8 +26,14 @@
     <div class="topbar">
       <input type="search" placeholder="🔍 חיפוש שם / טלפון...">
       <button class="btn btn-primary">+ ליד חדש</button>
-      <div class="who">
-        <span>דנה כהן · בעלת קליניקה</span>
+      <span id="topbar-badge-slot" style="margin-inline-start:auto"></span>
+      <div class="who" id="topbar-who-authed" style="display:none">
+        <span id="who-name"></span>
+        <span class="avatar" style="background:#7c5cff" id="who-avatar"></span>
+        <button class="btn btn-sm btn-ghost" id="logout-btn">התנתקות</button>
+      </div>
+      <div class="who" id="topbar-who-demo">
+        <span>דנה כהן · בעלת קליניקה (דמו מקומי)</span>
         <span class="avatar" style="background:#7c5cff">דכ</span>
       </div>
     </div>
@@ -58,26 +64,19 @@
         <div id="kanban-wrap"><div class="kanban" id="kanban"></div></div>
         <div id="leads-table-wrap" style="display:none"></div>
 
-        <div class="panel" id="gmaps-live-leads-panel" style="display:none;margin-top:16px">
+        <div class="panel" id="db-leads-panel" style="display:none;margin-top:16px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
             <div>
-              <h3 style="margin:0">🔌 לידים חיים מ-Google Maps (Supabase)</h3>
-              <div class="page-sub" id="gmaps-sync-status" style="margin:2px 0 0">טוען…</div>
+              <h3 style="margin:0">🗄️ לידים אמיתיים מה-DB (Supabase)</h3>
+              <div class="page-sub" id="db-leads-status" style="margin:2px 0 0">טוען…</div>
             </div>
-            <button class="btn btn-primary btn-sm" id="gmaps-sync-btn">🔄 משוך לידים חדשים</button>
-          </div>
-          <div id="gmaps-live-leads-list" style="margin-top:10px"></div>
-        </div>
-
-        <div class="panel" id="osm-live-leads-panel" style="display:none;margin-top:16px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-            <div>
-              <h3 style="margin:0">🗺️ לידים חיים מ-OpenStreetMap (חינמי, ללא מפתח API)</h3>
-              <div class="page-sub" id="osm-sync-status" style="margin:2px 0 0">טוען…</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-sm" id="gmaps-sync-btn">🔄 Google Maps</button>
+              <button class="btn btn-sm" id="osm-sync-btn">🔄 OpenStreetMap</button>
+              <button class="btn btn-sm btn-primary" id="db-refresh-btn">↻ רענן</button>
             </div>
-            <button class="btn btn-primary btn-sm" id="osm-sync-btn">🔄 משוך לידים חדשים</button>
           </div>
-          <div id="osm-live-leads-list" style="margin-top:10px"></div>
+          <div id="db-leads-table-wrap" style="margin-top:10px;max-height:340px;overflow-y:auto"></div>
         </div>
       </section>
 
@@ -137,11 +136,37 @@
   <div class="modal" id="modal"></div>
 </div>
 
+<!-- ============ Login (Supabase Auth) — פעיל רק כש-config.js מוגדר ============ -->
+<div class="modal-backdrop" id="login-overlay" style="display:none;background:#12131c">
+  <div class="modal" style="max-width:380px">
+    <div style="padding:28px 24px">
+      <div style="text-align:center;margin-bottom:18px">
+        <div style="width:44px;height:44px;margin:0 auto 10px;border-radius:12px;background:linear-gradient(135deg,#7c5cff,#4a63e7);display:flex;align-items:center;justify-content:center;font-size:22px">💎</div>
+        <h2 style="margin:0">Clinic Revenue OS</h2>
+        <div class="page-sub" style="margin-top:4px">התחברות למערכת (מחובר ל-Supabase)</div>
+      </div>
+      <form id="login-form">
+        <label style="font-size:12px;color:var(--muted)">אימייל</label>
+        <input type="email" id="login-email" required style="width:100%;padding:9px 10px;margin:4px 0 12px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box" placeholder="dana.cohen@demo.crm4clinic.local">
+        <label style="font-size:12px;color:var(--muted)">סיסמה</label>
+        <input type="password" id="login-password" required style="width:100%;padding:9px 10px;margin:4px 0 14px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box">
+        <button type="submit" class="btn btn-primary" style="width:100%">התחבר/י</button>
+        <div id="login-error" style="color:var(--red);font-size:12.5px;margin-top:10px;display:none"></div>
+      </form>
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)">
+        <b>פרטי התחברות לדמו</b> (סיסמה לכולם: <code>Demo1234!</code>):
+        <div id="login-demo-users" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="data.js"></script>
 <script src="app.js"></script>
 <script src="tour.js"></script>
 <!-- חיבור Supabase אופציונלי: config.js לא קיים ב-git; ראו config.example.js -->
 <script src="config.js" onerror="this.remove()"></script>
 <script src="supabaseClient.js"></script>
+<script src="auth.js"></script>
 </body>
 </html>

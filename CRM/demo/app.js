@@ -536,74 +536,84 @@
     clearTimeout(toast._h); toast._h = setTimeout(() => t.style.opacity = '0', 2200);
   }
 
-  // ---------------- Supabase live leads (Apify / OSM sync) ----------------
-  // תבנית גנרית: כל מקור חי (Google Maps, OpenStreetMap) הוא Edge Function
-  // אחת בפורמט זהה (GET=קריאה, POST=סנכרון) + פאנל DOM תואם ב-id prefix.
-  const SYNC_SOURCES = [
-    { fn: 'sync-apify-leads', prefix: 'gmaps', label: 'Google Maps' },
-    { fn: 'sync-osm-leads', prefix: 'osm', label: 'OpenStreetMap' },
-  ];
+  // ---------------- לידים אמיתיים מה-DB (אחרי התחברות) ----------------
+  // ברגע שיש session אמיתי, קוראים ישירות מהטבלאות עם ה-session של המשתמש —
+  // RLS דואג לבידוד. שתי הפונקציות (sync-apify-leads / sync-osm-leads)
+  // נשארות רק לכתיבה (POST) — מריצות סנכרון חדש מול המקור החיצוני.
+  const dbState = { stages: [], sources: [], leads: [] };
+
   function fmtSyncTime(d) {
     if (!d) return 'מעולם לא';
     return new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
-  async function callSyncFunction(functionName, method) {
-    const url = window.SUPABASE_FUNCTION_URL && window.SUPABASE_FUNCTION_URL(functionName);
-    const cfg = window.SUPABASE_CONFIG;
-    if (!url || !cfg) throw new Error('Supabase לא מוגדר');
-    const res = await fetch(url, {
-      method,
-      headers: { Authorization: 'Bearer ' + cfg.anonKey, apikey: cfg.anonKey, 'Content-Type': 'application/json' },
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok || body.success === false) throw new Error(body.error || ('HTTP ' + res.status));
-    return body;
+  async function loadDbLeadsData() {
+    const sb = window.supabaseClient;
+    const [{ data: stages }, { data: sources }, { data: leads }, { data: logs }] = await Promise.all([
+      sb.from('pipeline_stages').select('id, name, position').order('position'),
+      sb.from('lead_sources').select('id, name'),
+      sb.from('leads').select('id, full_name, phone, notes, stage_id, source_id, created_at, expected_value').order('created_at', { ascending: false }).limit(300),
+      sb.from('sync_logs').select('source, started_at, finished_at, status, leads_upserted').order('started_at', { ascending: false }).limit(10),
+    ]);
+    dbState.stages = stages || [];
+    dbState.sources = sources || [];
+    dbState.leads = leads || [];
+    const lastGmaps = (logs || []).find(l => l.source === 'apify_google_maps');
+    const lastOsm = (logs || []).find(l => l.source === 'osm_overpass');
+    const part = (label, l) => l ? `${label}: ${fmtSyncTime(l.finished_at || l.started_at)}${l.status === 'success' ? ` (${l.leads_upserted} חדשים)` : l.status === 'error' ? ' — שגיאה' : ' — רץ...'}` : `${label}: מעולם לא`;
+    $('#db-leads-status').textContent = `${dbState.leads.length} לידים בסה"כ · ${part('Google Maps', lastGmaps)} · ${part('OSM', lastOsm)}`;
+    renderDbLeadsTable();
   }
-  function renderLiveLeadsList(prefix, label, leads) {
-    const list = $('#' + prefix + '-live-leads-list');
-    if (!leads || !leads.length) { list.innerHTML = `<div class="empty-hint">עדיין אין לידים מ-${label}. לחצו "משוך לידים חדשים".</div>`; return; }
-    list.innerHTML = leads.map(l => `
-      <div class="urgent-row" style="cursor:default">
-        <span class="dot blue"></span>
-        <span class="txt"><b>${l.full_name}</b> · ${l.phone} ${l.notes ? '· ' + l.notes : ''}</span>
-        <span class="pill" style="background:#eaf0ff;color:var(--blue)">${label}</span>
-      </div>`).join('');
+  function renderDbLeadsTable() {
+    const sourceName = (id) => (dbState.sources.find(s => s.id === id) || {}).name || '—';
+    $('#db-leads-table-wrap').innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>שם</th><th>טלפון</th><th>מקור</th><th>שלב</th><th>שווי</th><th>נוצר</th></tr></thead>
+        <tbody>${dbState.leads.map(l => `
+          <tr>
+            <td>${l.full_name}</td>
+            <td>${l.phone}</td>
+            <td><span class="pill" style="background:#eaf0ff;color:var(--blue)">${sourceName(l.source_id)}</span></td>
+            <td><select data-lead="${l.id}" class="db-stage-select">${dbState.stages.map(s => `<option value="${s.id}" ${s.id === l.stage_id ? 'selected' : ''}>${s.name}</option>`).join('')}</select></td>
+            <td>${l.expected_value ? fmtMoney(l.expected_value) : '—'}</td>
+            <td>${fmtDate(l.created_at)}</td>
+          </tr>`).join('') || '<tr><td colspan="6"><div class="empty-hint">אין עדיין לידים ב-DB</div></td></tr>'}</tbody>
+      </table>`;
+    $$('#db-leads-table-wrap .db-stage-select').forEach((sel) => sel.addEventListener('change', async () => {
+      const { error } = await window.supabaseClient.from('leads').update({ stage_id: sel.value }).eq('id', sel.dataset.lead);
+      toast(error ? 'שגיאת עדכון: ' + error.message : 'השלב עודכן ✔ (כתיבה אמיתית ל-DB)');
+    }));
   }
-  async function loadLiveLeads(src) {
-    try {
-      const body = await callSyncFunction(src.fn, 'GET');
-      $('#' + src.prefix + '-live-leads-panel').style.display = 'block';
-      renderLiveLeadsList(src.prefix, src.label, body.leads);
-      const ls = body.lastSync;
-      $('#' + src.prefix + '-sync-status').textContent = ls
-        ? `עודכן לאחרונה: ${fmtSyncTime(ls.finished_at || ls.started_at)} · ${ls.status === 'success' ? `${ls.leads_upserted} חדשים` : ls.status === 'error' ? 'שגיאה' : 'רץ...'}`
-        : 'עדיין לא בוצע סנכרון';
-    } catch (e) {
-      console.warn(`loadLiveLeads(${src.fn}) failed:`, e.message || e);
-    }
-  }
-  async function runSync(src) {
-    const btn = $('#' + src.prefix + '-sync-btn');
+  async function runDbSync(functionName, label, btnId) {
+    const btn = $('#' + btnId);
+    const orig = btn.textContent;
     btn.disabled = true; btn.textContent = '🔄 מסנכרן...';
-    $('#' + src.prefix + '-sync-status').textContent = 'מסנכרן (עד כדקה)...';
     try {
-      const body = await callSyncFunction(src.fn, 'POST');
-      toast(`✔ ${src.label}: ${body.leads_upserted} לידים חדשים (${body.leads_skipped} כבר היו קיימים)`);
-      await loadLiveLeads(src);
+      const cfg = window.SUPABASE_CONFIG;
+      const url = window.SUPABASE_FUNCTION_URL(functionName);
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + (session ? session.access_token : cfg.anonKey), apikey: cfg.anonKey },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.success === false) throw new Error(body.error || ('HTTP ' + res.status));
+      toast(`✔ ${label}: ${body.leads_upserted} לידים חדשים (${body.leads_skipped} כבר היו קיימים)`);
+      await loadDbLeadsData();
     } catch (e) {
-      toast(`שגיאת סנכרון (${src.label}): ` + (e.message || e));
-      $('#' + src.prefix + '-sync-status').textContent = 'שגיאת סנכרון — ראו קונסולה';
+      toast(`שגיאת סנכרון (${label}): ` + (e.message || e));
     } finally {
-      btn.disabled = false; btn.textContent = '🔄 משוך לידים חדשים';
+      btn.disabled = false; btn.textContent = orig;
     }
   }
-  function initSupabaseLeadsPanel() {
-    SYNC_SOURCES.forEach(src => {
-      const btn = $('#' + src.prefix + '-sync-btn');
-      if (!btn) return;
-      btn.addEventListener('click', () => runSync(src));
-      loadLiveLeads(src);
-    });
+  function initDbLeadsPanel() {
+    $('#db-leads-panel').style.display = 'block';
+    $('#gmaps-sync-btn').onclick = () => runDbSync('sync-apify-leads', 'Google Maps', 'gmaps-sync-btn');
+    $('#osm-sync-btn').onclick = () => runDbSync('sync-osm-leads', 'OpenStreetMap', 'osm-sync-btn');
+    $('#db-refresh-btn').onclick = () => loadDbLeadsData();
+    loadDbLeadsData();
+  }
+  function teardownDbLeadsPanel() {
+    $('#db-leads-panel').style.display = 'none';
   }
 
   // ---------------- Init ----------------
@@ -622,7 +632,8 @@
     renderAll();
     go('dashboard');
     window.CRM = { go, openLeadModal, openCustomerModal, computeKpis, D };
-    window.addEventListener('supabase-ready', initSupabaseLeadsPanel);
+    window.addEventListener('auth-ready', initDbLeadsPanel);
+    window.addEventListener('auth-signed-out', teardownDbLeadsPanel);
   }
   document.addEventListener('DOMContentLoaded', init);
 })();

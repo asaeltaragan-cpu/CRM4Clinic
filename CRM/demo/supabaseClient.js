@@ -16,8 +16,8 @@
       b = document.createElement('div');
       b.id = 'db-badge';
       b.style.cssText = 'font-size:11px;padding:4px 10px;border-radius:20px;background:#f1f2f7;color:#6b7280;margin-inline-end:8px;white-space:nowrap;';
-      const who = document.querySelector('.topbar .who');
-      if (who) who.prepend(b);
+      const slot = document.getElementById('topbar-badge-slot');
+      if (slot) slot.appendChild(b);
     }
     b.innerHTML = html;
   }
@@ -34,17 +34,25 @@
       return; // אין קונפיג — מצב הדגמה מקומי, בלי להציג badge
     }
     setBadge('🔌 מתחבר ל-Supabase…');
+    let supabase;
     try {
       const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      const supabase = createClient(cfg.url, cfg.anonKey);
+      supabase = createClient(cfg.url, cfg.anonKey);
+    } catch (e) {
+      console.warn('Supabase client creation failed, staying in local demo mode:', e.message || e);
+      setBadge('⚠️ חיבור ל-Supabase נכשל — מצב הדגמה מקומי');
+      return;
+    }
+    // הלקוח נוצר — משחררים את auth.js/app.js להירשם להתחברות, בלי תלות
+    // בהצלחת הבדיקה הבאה (שהיא רק תצוגת badge, לא תנאי לכניסה למסך התחברות).
+    window.supabaseClient = supabase;
+    window.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase, config: cfg } }));
+    try {
       const { count, error } = await supabase.from('leads').select('*', { count: 'exact', head: true });
       if (error) throw error;
-      setBadge(`🔌 מחובר ל-Supabase · ${count ?? 0} לידים ב-DB (RLS)`);
-      window.supabaseClient = supabase;
-      window.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase, config: cfg } }));
+      setBadge(`🔌 Supabase מחובר · ${count ?? 0} לידים גלויים (RLS)`);
     } catch (e) {
-      console.warn('Supabase connection failed, staying in local demo mode:', e.message || e);
-      setBadge('⚠️ חיבור ל-Supabase נכשל — מצב הדגמה מקומי');
+      setBadge('🔌 Supabase מוגדר — התחבר/י כדי לראות נתונים');
     }
   }
 

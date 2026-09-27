@@ -54,16 +54,18 @@ async function main() {
   console.log('✅ קליניקה נוצרה:', clinic.id);
 
   // 2. אנשי צוות — משתמשי Auth אמיתיים + שורת public.users
+  // אימייל ASCII מפורש (לא נגזר מהשם העברי) — כתובות עם Unicode ב-local-part
+  // נדחות/מתנהגות לא אחיד ע"י ספקי Auth שונים, אז עדיף שם משתמש אנגלי קבוע.
   const STAFF_DEF = [
-    { full_name: 'דנה כהן', role: 'owner' },
-    { full_name: 'מיכל לוי', role: 'manager' },
-    { full_name: 'נועה מזרחי', role: 'sales' },
-    { full_name: 'שיר בן-דוד', role: 'sales' },
-    { full_name: 'ליאת אברהם', role: 'therapist' },
+    { full_name: 'דנה כהן', email: 'dana.cohen@demo.crm4clinic.local', role: 'owner' },
+    { full_name: 'מיכל לוי', email: 'michal.levi@demo.crm4clinic.local', role: 'manager' },
+    { full_name: 'נועה מזרחי', email: 'noa.mizrahi@demo.crm4clinic.local', role: 'sales' },
+    { full_name: 'שיר בן-דוד', email: 'shir.bendavid@demo.crm4clinic.local', role: 'sales' },
+    { full_name: 'ליאת אברהם', email: 'liat.avraham@demo.crm4clinic.local', role: 'therapist' },
   ];
   const staff = [];
   for (const s of STAFF_DEF) {
-    const email = `${s.full_name.replace(/\s+/g, '.').toLowerCase()}@demo.crm4clinic.local`;
+    const email = s.email;
     const { data: authUser, error: authErr } = await supabase.auth.admin.createUser({
       email, password: crypto.randomUUID(), email_confirm: true,
     });

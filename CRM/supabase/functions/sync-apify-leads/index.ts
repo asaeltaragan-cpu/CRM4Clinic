@@ -2,8 +2,12 @@
 //
 // מריצה את ה-Actor compass/google-maps-extractor דרך Apify REST API,
 // עושה upsert של לידים חדשים לטבלת leads (בלי לדרוס לידים קיימים),
-// ורושמת שורה ב-sync_logs עם התוצאה. נקראת גם מכפתור בדמו (anon key)
-// וגם מ-GitHub Actions פעם ביום (ראה .github/workflows/sync-leads.yml).
+// ורושמת שורה ב-sync_logs עם התוצאה. נקראת מכפתור בדמו (למשתמש מחובר
+// בלבד) וגם מ-GitHub Actions פעם ביום (ראה .github/workflows/sync-leads.yml).
+//
+// קריאת לידים (GET) לא עוברת יותר דרך הפונקציה — אחרי הוספת ניהול
+// משתמשים (ראו CRM/demo/auth.js), משתמש מחובר קורא ישירות מטבלת leads
+// עם ה-session שלו, ו-RLS דואג לבידוד הנכון. הפונקציה הזו רק כותבת.
 //
 // פריסה: supabase functions deploy sync-apify-leads
 // סוד נדרש: supabase secrets set APIFY_TOKEN=xxxxx
@@ -41,27 +45,8 @@ Deno.serve(async (req) => {
   if (clinicErr || !clinic) return json({ success: false, error: 'קליניקת דמו לא נמצאה. הריצו קודם את seed.mjs' }, 404);
   const clinicId = clinic.id;
 
-  // GET = קריאה בלבד (הדמו קורא כך כי ל-anon key אין הרשאת RLS על leads;
-  // הפונקציה חושפת בכוונה רק תת-סט קטן ובטוח של שדות עסקיים לצורך ההדגמה).
-  if (req.method === 'GET') {
-    const { data: source } = await supabase
-      .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', 'Google Maps').single();
-    const { data: leads } = await supabase
-      .from('leads')
-      .select('id, full_name, phone, notes, created_at, source_id')
-      .eq('clinic_id', clinicId)
-      .eq('source_id', source?.id ?? '00000000-0000-0000-0000-000000000000')
-      .order('created_at', { ascending: false })
-      .limit(200);
-    const { data: lastSync } = await supabase
-      .from('sync_logs')
-      .select('started_at, finished_at, status, leads_upserted, leads_skipped, message')
-      .eq('clinic_id', clinicId)
-      .eq('source', 'apify_google_maps')
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return json({ success: true, leads: leads ?? [], lastSync: lastSync ?? null });
+  if (req.method !== 'POST') {
+    return json({ success: false, error: 'Method not allowed — use POST' }, 405);
   }
 
   if (!apifyToken) {

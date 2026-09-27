@@ -5,6 +5,9 @@
 // לידים קיימים), ורושמת שורה ב-sync_logs. אותה תבנית בדיוק כמו
 // sync-apify-leads, כדי שהדמו וה-GitHub Action יעבדו עם שניהם באותו אופן.
 //
+// קריאת לידים (GET) לא עוברת יותר דרך הפונקציה — משתמש מחובר קורא ישירות
+// מטבעת leads עם ה-session שלו (RLS). הפונקציה הזו רק כותבת (POST).
+//
 // פריסה: supabase functions deploy sync-osm-leads
 // אין סוד נדרש — Overpass API חופשי לגמרי (רישיון ODbL, קרדיט ל-OSM contributors).
 
@@ -79,25 +82,8 @@ Deno.serve(async (req) => {
   if (clinicErr || !clinic) return json({ success: false, error: 'קליניקת דמו לא נמצאה. הריצו קודם את seed.mjs' }, 404);
   const clinicId = clinic.id;
 
-  if (req.method === 'GET') {
-    const { data: leads } = await supabase
-      .from('leads')
-      .select('id, full_name, phone, notes, created_at, source_id')
-      .eq('clinic_id', clinicId)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    const { data: source } = await supabase
-      .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', SOURCE_NAME).single();
-    const osmLeads = (leads || []).filter((l: any) => l.source_id === source?.id);
-    const { data: lastSync } = await supabase
-      .from('sync_logs')
-      .select('started_at, finished_at, status, leads_upserted, leads_skipped, message')
-      .eq('clinic_id', clinicId)
-      .eq('source', 'osm_overpass')
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return json({ success: true, leads: osmLeads, lastSync: lastSync ?? null });
+  if (req.method !== 'POST') {
+    return json({ success: false, error: 'Method not allowed — use POST' }, 405);
   }
 
   const { data: logRow } = await supabase

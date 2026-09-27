@@ -39,17 +39,19 @@ CRM4Clinic/
     │   ├── data.js                ← מחולל נתוני דמו (seed קבוע)
     │   ├── tour.js                ← הסיור המודרך למכירה
     │   ├── styles.css
-    │   ├── supabaseClient.js      ← חיבור אופציונלי ל-Supabase (badge + live leads)
+    │   ├── supabaseClient.js      ← חיבור אופציונלי ל-Supabase (badge + client)
+    │   ├── auth.js                 ← מסך התחברות + ניהול session (Supabase Auth)
     │   ├── config.example.js      ← תבנית להגדרות Supabase (config.js בפועל לא ב-git)
     │   └── README.md
     │
     ├── supabase/                  ← הבק-אנד האמיתי
     │   ├── schema.sql              ← סכמת בסיס (18 טבלאות + RLS)
     │   ├── migrations/             ← תוספות סכמה מדורגות (002, 003, ...)
-    │   ├── functions/              ← Edge Functions
+    │   ├── functions/              ← Edge Functions (כתיבה בלבד — POST)
     │   │   ├── sync-apify-leads/   ← סנכרון מ-Google Maps (Apify)
     │   │   └── sync-osm-leads/     ← סנכרון מ-OpenStreetMap (חינמי)
     │   ├── seed.mjs                ← זריעת נתוני דמו לפרויקט Supabase אמיתי
+    │   ├── set-demo-passwords.mjs  ← קביעת סיסמת דמו קבועה ל-5 אנשי הצוות
     │   └── README.md               ← הוראות הקמה מלאות
     │
     └── leads/                     ← תוצרי מקור לידים חיצוני (Proof of Concept)
@@ -71,9 +73,9 @@ python -m http.server 8080
 
 **סיור מודרך למכירה:** כפתור **"🎯 סיור מודרך למכירה"** בתחתית הסרגל הצדדי — 9 שלבים שעוברים בין המסכים עם הסבר מכירתי שנשאב מהנתונים בזמן אמת. זו נקודת הכניסה המומלצת להצגה ראשונה מול קליניקה.
 
-**מסך הלידים** הוא המסך הכי "חי": Kanban + טבלה עם 50 לידי דמו, ובתחתיתו (אם מוגדר חיבור ל-Supabase) שני פאנלים נוספים — "🔌 Google Maps" ו-"🗺️ OpenStreetMap" — עם לידים אמיתיים וכפתור "משוך לידים חדשים" (ראו [Practice.md](Practice.md) לפירוט המלא של תהליך הלידים).
+**מסך הלידים** הוא המסך הכי "חי": Kanban + טבלה עם 50 לידי דמו, ולמשתמש מחובר (ראו למטה) — גם פאנל "🗄️ לידים אמיתיים מה-DB" עם טבלת לידים חיה מ-Supabase (כולל אלה שהגיעו מ-Google Maps/OpenStreetMap), שינוי שלב אמיתי, ושני כפתורי סנכרון יזום (ראו [Practice.md](Practice.md) לפירוט המלא של תהליך הלידים).
 
-**חיבור ל-Supabase אמיתי (אופציונלי):** בלי `CRM/demo/config.js` הדמו עובד לגמרי על נתונים מקומיים (`data.js`). עם קובץ `config.js` (מועתק מ-`config.example.js` עם Project URL + anon key), הדמו גם מציג badge "מחובר ל-Supabase" וגם את שני פאנלי הלידים החיים. הוראות מלאות: [CRM/supabase/README.md](CRM/supabase/README.md).
+**חיבור ל-Supabase + ניהול משתמשים (אופציונלי):** בלי `CRM/demo/config.js` הדמו עובד לגמרי על נתונים מקומיים (`data.js`), בלי מסך התחברות. עם `config.js` מוגדר (מועתק מ-`config.example.js`), הדמו מציג **מסך התחברות אמיתי** (Supabase Auth) — 5 חשבונות דמו מוצגים במסך עצמו עם סיסמה משותפת. אחרי התחברות נפתח פאנל הלידים האמיתי מה-DB. הוראות מלאות: [CRM/supabase/README.md](CRM/supabase/README.md).
 
 ## תיעוד נוסף
 
