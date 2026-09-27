@@ -12,8 +12,7 @@
 
 1. בתפריט הפרויקט: **SQL Editor** → **New query**.
 2. הדביקו את כל התוכן של [schema.sql](schema.sql) והריצו (Run).
-3. ודאו שאין שגיאות — נוצרות 18 טבלאות, RLS מופעל, ופונקציות עזר (`auth_clinic`, `auth_role`).
-4. **חשוב — הריצו מיד אחרי זה גם את [migrations/004_grants.sql](migrations/004_grants.sql).** טבלאות שנוצרות ב-SQL Editor (בניגוד ל-Table Editor הגרפי) לא מקבלות אוטומטית את הרשאות ה-GRANT הבסיסיות ל-`anon`/`authenticated`/`service_role` שסופאבייס בדרך כלל מגדיר לבד. בלי זה, **כל** קריאת REST לכל טבלה — כולל עם `service_role` — נכשלת עם `404 "Could not find the table ... in the schema cache"`, גם אם ה-RLS מוגדר נכון (GRANT ו-RLS הם שני דברים נפרדים ב-Postgres). זה הגורם השכיח ביותר לשגיאה הזו, שכיח בהרבה מ"הפרויקט נרדם".
+3. **ודאו שזה באמת רץ**: אחרי הלחיצה על Run צריך להופיע "Success. No rows returned" בלי שום שגיאה אדומה, ומיד אחר כך ב-**Table Editor** (בתפריט הצד) אמורות להופיע 18 טבלאות (`clinics`, `users`, `leads` וכו'). אם Table Editor מראה "No tables or views" — הסכמה לא באמת נכנסה; הדביקו ותריצו שוב את כל התוכן של `schema.sql`. (זה הגורם הכי נפוץ לשגיאת `404 "Could not find the table ... in the schema cache"` שמופיעה על **כל** קריאה — כולל עם service_role: הטבלאות פשוט לא נוצרו, לא בעיה של הרשאות.)
 
 ## שלב 3 — זריעת נתוני דמו (אופציונלי אך מומלץ לפיצ')
 
@@ -75,8 +74,13 @@ npm run set-passwords
 
 **⚠️ אם `seed.mjs` רץ לפני התיקון הזה**: יכול להיות שהמשתמשים נוצרו עם אימיילים בעברית (הפורמט הישן). אם ההתחברות נכשלת עם "user not found", בדקו ב-Authentication → Users בדשבורד איזה אימייל נוצר בפועל, או הריצו מחדש `npm run seed` (זה יוצר קליניקת דמו נוספת — לא אידמפוטנטי, זה מוכר וזמני).
 
+**⚠️ חובה — [migrations/005_fix_rls_recursion.sql](migrations/005_fix_rls_recursion.sql):** `auth_clinic()`/`auth_role()` שואלות את `public.users`, אבל ל-`users` יש מדיניות RLS שמפעילה שוב את אותן פונקציות — רקורסיה אינסופית, שגורמת ל-`500` מ-PostgREST על כל שאילתה שתלויה בהן (כמעט כל שאילתה אחרי התחברות, כולל טעינת הפרופיל). בלי המיגרציה הזו **ההתחברות תיכשל בשקט אחרי אימות הסיסמה**. הריצו אותה פעם אחת ב-SQL Editor — היא הופכת את שתי הפונקציות ל-`security definer`, כך שהשאילתה הפנימית בתוכן עוקפת את ה-RLS (RLS לא חל על בעל הטבלה כברירת מחדל) ולא נכנסת ללולאה.
+
+✅ **סדר ההרצה המלא, מאומת מקצה לקצה** (כפי שסופק בפועל): `schema.sql` → `002_lead_sync.sql` → `003_osm_lead_source.sql` → `004_grants.sql` → `005_fix_rls_recursion.sql` → `npm run seed` → (הרצה חוזרת של ה-INSERT-ים ב-002/003 כדי להוסיף את מקורות "Google Maps"/"OpenStreetMap" לקליניקה שרק נוצרה) → `npm run set-passwords`.
+
 ## הערות אבטחה
 
 - מפתח ה-`service_role` **סודי** — הוא עוקף RLS. נמצא רק ב-`.env` המקומי שלכם (ב-`.gitignore`) ומשמש להרצה חד-פעמית של סקריפטי הזריעה/סיסמאות, לעולם לא בקוד דפדפן.
 - מפתח ה-`anon` בטוח לחשיפה בצד לקוח — כל הגנת המידע נשענת על מדיניות ה-RLS שהוגדרה ב-`schema.sql`, ועכשיו גם על התחברות אמיתית (שלב 6).
-- **אם מקבלים `404 "Could not find the table ... in the schema cache"` על כל טבלה, כולל עם service_role**: כמעט תמיד חסרות ההרשאות מ-[migrations/004_grants.sql](migrations/004_grants.sql) (ראו שלב 2.4) — הריצו אותו קודם. אם זה כבר רץ ועדיין רואים את השגיאה, נסו **Settings → API → Reload schema cache** בדשבורד; ורק אם שום דבר לא עוזר, יכול להיות שפרויקט בטיר החינמי שלא היה פעיל כשבוע נכנס למצב "מושהה" ולוקח זמן להתעורר.
+- **`404 "Could not find the table ... in the schema cache"` על כל טבלה**: כמעט תמיד `schema.sql` לא באמת רץ (בדקו ב-Table Editor שהטבלאות קיימות) — ראו שלב 2. פחות סביר: הרשאות חסרות ([004_grants.sql](migrations/004_grants.sql)) או פרויקט בטיר החינמי שנכנס למצב "מושהה" אחרי חוסר פעילות.
+- **`500` בכל שאילתה אחרי התחברות מוצלחת**: רקורסיה ב-RLS — הריצו [005_fix_rls_recursion.sql](migrations/005_fix_rls_recursion.sql) (שלב 6).
