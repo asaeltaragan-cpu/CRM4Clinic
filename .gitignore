@@ -1,1 +1,6 @@
 *.vsix
+
+# Supabase secrets (CRM project)
+CRM/supabase/.env
+CRM/supabase/node_modules/
+CRM/demo/config.js
