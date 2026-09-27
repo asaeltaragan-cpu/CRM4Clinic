@@ -12,11 +12,14 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        function: [sync-apify-leads, sync-osm-leads]
     steps:
-      - name: Call sync-apify-leads Edge Function
+      - name: Call ${{ matrix.function }} Edge Function
         env:
           SUPABASE_ANON_KEY: sb_publishable_Ec8hGZDXy_qNv7rBfMA9bA_oHip0-Zi
-          FUNCTION_URL: https://qprifajxctsbjnnqvgpq.supabase.co/functions/v1/sync-apify-leads
+          FUNCTION_URL: https://qprifajxctsbjnnqvgpq.supabase.co/functions/v1/${{ matrix.function }}
         run: |
           response=$(curl -sS -w "\n%{http_code}" -X POST "$FUNCTION_URL" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
@@ -27,6 +30,6 @@ jobs:
           echo "HTTP $status"
           echo "$body"
           if [ "$status" -ge 400 ]; then
-            echo "::error::sync-apify-leads failed with HTTP $status"
+            echo "::error::${{ matrix.function }} failed with HTTP $status"
             exit 1
           fi

@@ -58,15 +58,26 @@
         <div id="kanban-wrap"><div class="kanban" id="kanban"></div></div>
         <div id="leads-table-wrap" style="display:none"></div>
 
-        <div class="panel" id="live-leads-panel" style="display:none;margin-top:16px">
+        <div class="panel" id="gmaps-live-leads-panel" style="display:none;margin-top:16px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
             <div>
               <h3 style="margin:0">🔌 לידים חיים מ-Google Maps (Supabase)</h3>
-              <div class="page-sub" id="sync-status" style="margin:2px 0 0">טוען…</div>
+              <div class="page-sub" id="gmaps-sync-status" style="margin:2px 0 0">טוען…</div>
             </div>
-            <button class="btn btn-primary btn-sm" id="sync-leads-btn">🔄 משוך לידים חדשים</button>
+            <button class="btn btn-primary btn-sm" id="gmaps-sync-btn">🔄 משוך לידים חדשים</button>
           </div>
-          <div id="live-leads-list" style="margin-top:10px"></div>
+          <div id="gmaps-live-leads-list" style="margin-top:10px"></div>
+        </div>
+
+        <div class="panel" id="osm-live-leads-panel" style="display:none;margin-top:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <h3 style="margin:0">🗺️ לידים חיים מ-OpenStreetMap (חינמי, ללא מפתח API)</h3>
+              <div class="page-sub" id="osm-sync-status" style="margin:2px 0 0">טוען…</div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="osm-sync-btn">🔄 משוך לידים חדשים</button>
+          </div>
+          <div id="osm-live-leads-list" style="margin-top:10px"></div>
         </div>
       </section>
 

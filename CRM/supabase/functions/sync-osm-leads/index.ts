@@ -1,13 +1,12 @@
-// Clinic Revenue OS — Supabase Edge Function: סנכרון לידים מ-Apify (Google Maps)
+// Clinic Revenue OS — Supabase Edge Function: סנכרון לידים מ-OpenStreetMap (Overpass API)
 //
-// מריצה את ה-Actor compass/google-maps-extractor דרך Apify REST API,
-// עושה upsert של לידים חדשים לטבלת leads (בלי לדרוס לידים קיימים),
-// ורושמת שורה ב-sync_logs עם התוצאה. נקראת גם מכפתור בדמו (anon key)
-// וגם מ-GitHub Actions פעם ביום (ראה .github/workflows/sync-leads.yml).
+// מקור לידים חינמי לגמרי, בלי מפתח API: שולף עסקי יופי/בריאות רלוונטיים
+// בישראל מ-OpenStreetMap דרך Overpass API, ועושה upsert ל-leads (בלי לדרוס
+// לידים קיימים), ורושמת שורה ב-sync_logs. אותה תבנית בדיוק כמו
+// sync-apify-leads, כדי שהדמו וה-GitHub Action יעבדו עם שניהם באותו אופן.
 //
-// פריסה: supabase functions deploy sync-apify-leads
-// סוד נדרש: supabase secrets set APIFY_TOKEN=xxxxx
-// (SUPABASE_URL ו-SUPABASE_SERVICE_ROLE_KEY מוזרקים אוטומטית ע"י Supabase)
+// פריסה: supabase functions deploy sync-osm-leads
+// אין סוד נדרש — Overpass API חופשי לגמרי (רישיון ODbL, קרדיט ל-OSM contributors).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -17,8 +16,25 @@ const CORS_HEADERS = {
 };
 
 const CLINIC_SLUG = 'crm4clinic-demo';
-const SEARCH_TERMS = ['קליניקת יופי', 'מכון קוסמטיקה', 'רפואה אסתטית', 'מרפאת עור ולייזר', 'מכון להסרת שיער בלייזר'];
-const MAX_PER_TERM = 15; // עלות מוגבלת מראש: 5 × 15 × $0.005 ≈ $0.375 לכל סנכרון
+const SOURCE_NAME = 'OpenStreetMap';
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
+// עסקי יופי/בריאות אסתטית בישראל — תיוגי OSM רלוונטיים
+const OVERPASS_QUERY = `
+[out:json][timeout:50];
+area["ISO3166-1"="IL"][admin_level=2]->.il;
+(
+  nwr["shop"="beauty"](area.il);
+  nwr["healthcare"="dermatologist"](area.il);
+  nwr["healthcare"="plastic_surgeon"](area.il);
+  nwr["amenity"="spa"](area.il);
+  nwr["leisure"="spa"](area.il);
+);
+out center tags 200;
+`;
 
 function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -28,12 +44,34 @@ function normalizePhone(raw: string | null | undefined): string | null {
   return digits ? '+' + digits : null;
 }
 
+function addressOf(tags: Record<string, string>): string {
+  return [tags['addr:street'], tags['addr:housenumber'], tags['addr:city']].filter(Boolean).join(' ');
+}
+
+async function fetchOverpass(): Promise<any[]> {
+  let lastErr: unknown;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: OVERPASS_QUERY,
+      });
+      if (!res.ok) throw new Error(`Overpass HTTP ${res.status}: ${await res.text()}`);
+      const json = await res.json();
+      return json.elements || [];
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const apifyToken = Deno.env.get('APIFY_TOKEN');
   const supabase = createClient(supabaseUrl, serviceKey);
 
   const { data: clinic, error: clinicErr } = await supabase
@@ -41,71 +79,50 @@ Deno.serve(async (req) => {
   if (clinicErr || !clinic) return json({ success: false, error: 'קליניקת דמו לא נמצאה. הריצו קודם את seed.mjs' }, 404);
   const clinicId = clinic.id;
 
-  // GET = קריאה בלבד (הדמו קורא כך כי ל-anon key אין הרשאת RLS על leads;
-  // הפונקציה חושפת בכוונה רק תת-סט קטן ובטוח של שדות עסקיים לצורך ההדגמה).
   if (req.method === 'GET') {
-    const { data: source } = await supabase
-      .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', 'Google Maps').single();
     const { data: leads } = await supabase
       .from('leads')
       .select('id, full_name, phone, notes, created_at, source_id')
       .eq('clinic_id', clinicId)
-      .eq('source_id', source?.id ?? '00000000-0000-0000-0000-000000000000')
       .order('created_at', { ascending: false })
       .limit(200);
+    const { data: source } = await supabase
+      .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', SOURCE_NAME).single();
+    const osmLeads = (leads || []).filter((l: any) => l.source_id === source?.id);
     const { data: lastSync } = await supabase
       .from('sync_logs')
       .select('started_at, finished_at, status, leads_upserted, leads_skipped, message')
       .eq('clinic_id', clinicId)
-      .eq('source', 'apify_google_maps')
+      .eq('source', 'osm_overpass')
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    return json({ success: true, leads: leads ?? [], lastSync: lastSync ?? null });
-  }
-
-  if (!apifyToken) {
-    return json({ success: false, error: 'APIFY_TOKEN לא מוגדר (supabase secrets set APIFY_TOKEN=...)' }, 500);
+    return json({ success: true, leads: osmLeads, lastSync: lastSync ?? null });
   }
 
   const { data: logRow } = await supabase
     .from('sync_logs')
-    .insert({ clinic_id: clinicId, source: 'apify_google_maps', status: 'running' })
+    .insert({ clinic_id: clinicId, source: 'osm_overpass', status: 'running' })
     .select().single();
 
   try {
-    const apifyRes = await fetch(
-      `https://api.apify.com/v2/acts/compass~google-maps-extractor/run-sync-get-dataset-items?token=${apifyToken}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          searchStringsArray: SEARCH_TERMS,
-          locationQuery: 'ישראל',
-          maxCrawledPlacesPerSearch: MAX_PER_TERM,
-          language: 'iw',
-          skipClosedPlaces: true,
-        }),
-      }
-    );
-    if (!apifyRes.ok) throw new Error(`Apify HTTP ${apifyRes.status}: ${await apifyRes.text()}`);
-    const items = await apifyRes.json();
+    const elements = await fetchOverpass();
 
     const { data: source } = await supabase
-      .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', 'Google Maps').single();
+      .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', SOURCE_NAME).single();
     const { data: stage } = await supabase
       .from('pipeline_stages').select('id').eq('clinic_id', clinicId).eq('position', 1).single();
 
-    const candidates = items
-      .filter((it: any) => !it.permanentlyClosed && !it.temporarilyClosed)
-      .map((it: any) => ({
-        full_name: it.title as string,
-        phone: normalizePhone(it.phone || it.phoneUnformatted),
-        notes: [it.categoryName, it.address].filter(Boolean).join(' · '),
+    const candidates = elements
+      .map((el: any) => el.tags || {})
+      .filter((tags: any) => tags.name)
+      .map((tags: any) => ({
+        full_name: tags.name as string,
+        phone: normalizePhone(tags.phone || tags['contact:phone']),
+        notes: [tags.shop || tags.healthcare || tags.amenity || tags.leisure, addressOf(tags)].filter(Boolean).join(' · '),
       }))
       .filter((l: any) => l.full_name && l.phone);
 
-    // הימנעות מכפילויות: לא דורסים לידים שכבר קיימים לפי טלפון
     const phones = [...new Set(candidates.map((c: any) => c.phone))];
     let existingPhones = new Set<string>();
     if (phones.length > 0) {
@@ -141,10 +158,10 @@ Deno.serve(async (req) => {
     await supabase.from('sync_logs').update({
       finished_at: new Date().toISOString(), status: 'success',
       leads_upserted: inserted, leads_skipped: skipped,
-      message: `${items.length} נסרקו, ${inserted} לידים חדשים נוספו, ${skipped} כבר היו קיימים`,
+      message: `${elements.length} עסקים נמצאו ב-OSM, ${candidates.length} עם שם+טלפון, ${inserted} לידים חדשים נוספו`,
     }).eq('id', logRow!.id);
 
-    return json({ success: true, scraped: items.length, leads_upserted: inserted, leads_skipped: skipped });
+    return json({ success: true, scraped: elements.length, leads_upserted: inserted, leads_skipped: skipped });
   } catch (e) {
     await supabase.from('sync_logs').update({
       finished_at: new Date().toISOString(), status: 'error', message: String(e?.message || e),

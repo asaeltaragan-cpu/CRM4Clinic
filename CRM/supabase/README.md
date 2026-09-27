@@ -32,29 +32,32 @@ npm run seed
 2. ב-`CRM/demo/`, העתיקו את `config.example.js` ל-`config.js` (לא ב-git) ומלאו שם את שני הערכים.
 3. פתחו את הדמו — badge קטן בסרגל העליון יראה "🔌 מחובר ל-Supabase" ומספר הלידים האמיתי מה-DB.
 
-## שלב 5 — סנכרון לידים אוטומטי מ-Apify (Google Maps)
+## שלב 5 — סנכרון לידים אוטומטי משני מקורות
 
-זה מה שמזין את פאנל "🔌 לידים חיים מ-Google Maps" במסך הלידים בדמו, כולל כפתור "משוך לידים חדשים" ותאריך "עודכן לאחרונה".
+זה מה שמזין את פאנלי "🔌 לידים חיים" במסך הלידים בדמו (Google Maps + OpenStreetMap), כולל כפתור "משוך לידים חדשים" ותאריך "עודכן לאחרונה" לכל אחד.
 
-1. **הרצת המיגרציה**: ב-SQL Editor, הדביקו והריצו את [migrations/002_lead_sync.sql](migrations/002_lead_sync.sql) — מוסיף טבלת `sync_logs` ומוודא קיום מקור ליד "Google Maps".
-2. **פריסת ה-Edge Function** (דורש [Supabase CLI](https://supabase.com/docs/guides/cli)):
+1. **הרצת המיגרציות** (ב-SQL Editor, לפי הסדר):
+   - [migrations/002_lead_sync.sql](migrations/002_lead_sync.sql) — טבלת `sync_logs` + מקור ליד "Google Maps".
+   - [migrations/003_osm_lead_source.sql](migrations/003_osm_lead_source.sql) — מקור ליד "OpenStreetMap".
+2. **פריסת שתי ה-Edge Functions** (דורש [Supabase CLI](https://supabase.com/docs/guides/cli)):
    ```bash
    supabase login
    supabase link --project-ref qprifajxctsbjnnqvgpq
    supabase secrets set APIFY_TOKEN=<הטוקן שלכם מ-Apify Console → Settings → Integrations>
    supabase functions deploy sync-apify-leads
+   supabase functions deploy sync-osm-leads
    ```
-   `SUPABASE_URL` ו-`SUPABASE_SERVICE_ROLE_KEY` מוזרקים אוטומטית ע"י Supabase לפונקציה — אין צורך להגדיר אותם.
+   `sync-osm-leads` לא צריך שום סוד — Overpass API (OpenStreetMap) חינמי וללא מפתח. `SUPABASE_URL` ו-`SUPABASE_SERVICE_ROLE_KEY` מוזרקים אוטומטית ע"י Supabase לשתי הפונקציות.
 3. **בדיקה ידנית** (אופציונלי, לפני שהדמו קורא לזה):
    ```bash
-   curl -X POST https://qprifajxctsbjnnqvgpq.supabase.co/functions/v1/sync-apify-leads \
-     -H "Authorization: Bearer <anon key>"
+   curl -X POST https://qprifajxctsbjnnqvgpq.supabase.co/functions/v1/sync-apify-leads -H "Authorization: Bearer <anon key>"
+   curl -X POST https://qprifajxctsbjnnqvgpq.supabase.co/functions/v1/sync-osm-leads -H "Authorization: Bearer <anon key>"
    ```
-4. **אוטומציה יומית**: [.github/workflows/sync-leads.yml](../../.github/workflows/sync-leads.yml) קורא ל-Function פעם ביום (06:00 UTC) דרך GitHub Actions — לא נדרשת פעולה נוספת, זה כבר פעיל ברגע שה-Function פרוסה ושהריפו ב-GitHub. אפשר גם להריץ ידנית מטאב **Actions → Sync leads from Apify → Supabase → Run workflow**.
+4. **אוטומציה יומית**: [.github/workflows/sync-leads.yml](../../.github/workflows/sync-leads.yml) קורא לשתי ה-Functions פעם ביום (06:00 UTC) דרך GitHub Actions (matrix job) — לא נדרשת פעולה נוספת, זה כבר פעיל ברגע שה-Functions פרוסות והריפו ב-GitHub. אפשר גם להריץ ידנית מטאב **Actions → Sync leads from Apify → Supabase → Run workflow**.
 
-**איך זה עובד**: הכפתור בדמו וה-GitHub Action קוראים לאותה Function. `POST` מריץ סנכרון חדש (Apify → upsert ל-`leads`, בלי לדרוס לידים קיימים לפי טלפון, ורישום ל-`sync_logs`). `GET` (שהדמו קורא בטעינת המסך) מחזיר את הלידים הנוכחיים + זמן הסנכרון האחרון — כי למפתח ה-anon אין הרשאת RLS לקרוא מ-`leads` ישירות, ולכן הקריאה עוברת דרך ה-Function (שמשתמשת ב-service_role בצד השרת בלבד).
+**איך זה עובד**: כל מקור הוא Edge Function עצמאית באותו פורמט (`POST` = סנכרון חדש + upsert בלי לדרוס לידים קיימים לפי טלפון + רישום ל-`sync_logs`; `GET` = הלידים הנוכחיים + זמן סנכרון אחרון). הקריאה מהדמו עוברת דרך ה-Function ולא ישירות לטבלה, כי למפתח ה-anon אין הרשאת RLS לקרוא מ-`leads` (ה-service_role נשאר בצד השרת בלבד).
 
-**עלות**: כל סנכרון מוגבל ל-5 מונחי חיפוש × 15 מקומות = כ-$0.375 (Apify pay-per-event).
+**עלות**: Apify — מוגבל ל-5 מונחי חיפוש × 15 מקומות = כ-$0.375 לסנכרון. OpenStreetMap — **$0 תמיד**, אבל תלוי בשרתי Overpass הציבוריים (טוב לרענון יומי, לא לעומס production כבד).
 
 ## הערות אבטחה
 
