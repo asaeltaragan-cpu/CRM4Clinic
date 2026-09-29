@@ -145,7 +145,7 @@
     spot.style.width = (r.width + 16) + 'px';
     spot.style.height = (r.height + 16) + 'px';
 
-    const cardW = 340, margin = 16;
+    const margin = 16, cardW = card.offsetWidth || 340;
     let top = r.bottom + margin;
     let left = r.left + r.width / 2 - cardW / 2;
     if (top + 200 > window.innerHeight) top = Math.max(margin, r.top - 220);
