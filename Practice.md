@@ -74,3 +74,36 @@ Apify / Overpass  →  Edge Function (Deno, Supabase, POST בלבד)  →  טב�
 - **חשוב לזכור**: `supabase-ready` משוגר מיד אחרי יצירת ה-client (לא תלוי בהצלחת שום שאילתה) — אל תוסיפו תלות בין אתחול האימות לבין בדיקת badge כלשהי, כדי שמסך ההתחברות תמיד יעלה גם אם טבלה ספציפית לא זמינה כרגע.
 - **פרויקט Supabase "נרדם"**: בטיר החינמי, פרויקט לא פעיל כשבוע נכנס למצב מושהה ולוקח זמן להתעורר בפעם הבאה שפונים אליו. זה קורה, אבל בפועל הסיבה השכיחה יותר ל"table not found in schema cache" היא ש-`schema.sql` פשוט לא רץ — לבדוק תמיד קודם ב-Table Editor שהטבלאות קיימות.
 - **סדר הקמה מאומת (עבד בפועל)**: `schema.sql` → `002` → `003` → `004_grants.sql` → `005_fix_rls_recursion.sql` (קריטי — בלעדיו ההתחברות נכשלת ב-500 אחרי אימות הסיסמה, בגלל רקורסיה ב-RLS כש-`auth_clinic()`/`auth_role()` שואלות את `users` שיש לה מדיניות שמפעילה אותן שוב) → `npm run seed` → הרצה חוזרת של ה-INSERT-ים ב-002/003 (עכשיו יש קליניקה) → `npm run set-passwords`.
+
+---
+
+## 4. התאמה לנייד - חובה בכל שינוי ממשק
+
+**כלל קבוע: כל שינוי ב-UI (בעיקר `CRM/demo/**`) חייב לעבוד באופן מיטבי בטלפון נייד, ב-Chrome וב-Safari, לפני שהוא נחשב גמור.** בעלות קליניקות ומזכירות עובדות בעיקר מהטלפון, והדמו נשלח ללקוחות כקישור - כלומר נפתח קודם כל בנייד.
+
+### 4.1 כללי עיצוב
+
+- **Mobile-first**: כל מסך חייב לעבוד ברוחב 320px **בלי גלילה אופקית של הדף** ועם ניווט זמין תמיד.
+- **ניווט**: מתחת ל-900px הסיידבר הופך לסרגל תחתון (`.sidebar` ב-`styles.css`). מסך חדש = כפתור `.nav-item` עם `data-short` (תווית קצרה לנייד) ו-`<span class="nav-ico">` / `<span class="nav-label">`.
+- **טבלאות**: תמיד בתוך עוטף עם `class="table-scroll"` - הטבלה גוללת בתוך עצמה, לא הדף.
+- **שדות קלט**: `font-size` לפחות 16px בנייד (אחרת iPhone עושה zoom אוטומטי ב-focus).
+- **אזורי מגע**: לפחות 40px גובה לכפתורים.
+- **רוחבים**: אין רוחב קבוע בפיקסלים בלי `max-width` / `min()`. מודאלים עד 95vw. גריד עם עמודה קבועה - לעבור לעמודה אחת במובייל.
+- **iPhone עם notch**: שימוש ב-`env(safe-area-inset-bottom)` לאלמנטים צמודים לתחתית (ה-meta viewport כולל `viewport-fit=cover`).
+
+### 4.2 בדיקה חובה לפני push
+
+1. **מקומית** (Chromium):
+   ```bash
+   cd CRM/tests/mobile && npm ci
+   CHROMIUM_PATH=/opt/pw-browsers/chromium node mobile-check.mjs --only=chromium   # בסביבת Claude Code בענן
+   node mobile-check.mjs                                                            # במחשב עם דפדפני Playwright מותקנים
+   ```
+   הסקריפט עובר על Pixel 7, Galaxy S9+, 320px ודסקטופ (Chrome) ועל iPhone 13, iPhone SE, iPad Mini ודסקטופ (WebKit = המנוע של Safari): ניווט לכל מסך, אין גלילה אופקית, מודאלים וסיור בתוך המסך, inputs ב-16px, אין שגיאות JS. צילומי מסך נשמרים ב-`CRM/tests/mobile/screenshots/`.
+2. **ב-GitHub Actions**: `.github/workflows/mobile-check.yml` רץ אוטומטית על כל push/PR שנוגע ב-`CRM/demo/**` - חייב להיות ירוק על שני המנועים. צילומי המסך זמינים כ-artifact בשם `mobile-screenshots`.
+3. **לצרף צילומי מסך מהנייד** למשתמש בסיום כל שינוי UI.
+4. מסך או רכיב חדש - להוסיף אותו לבדיקה ב-`mobile-check.mjs`.
+
+### 4.3 מגבלה ידועה
+
+WebKit של Playwright הוא המנוע של Safari, **לא** Safari של iOS עצמו. הוא תופס את רוב בעיות ה-layout, אבל לא התנהגויות ייחודיות ל-iPhone (סרגל הכתובת המתכווץ, המקלדת שדוחפת את המסך, ה-notch בפועל). **לפני הצגה ללקוח - לפתוח את הקישור בטלפון אמיתי (iPhone + Android).**
