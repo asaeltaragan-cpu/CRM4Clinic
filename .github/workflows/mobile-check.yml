@@ -1,0 +1,42 @@
+name: Mobile check (Chrome + Safari/WebKit)
+
+# בודק שהדמו (CRM/demo) מותאם לנייד על Chromium ועל WebKit (המנוע של Safari),
+# במכשירי Pixel / Galaxy / iPhone / iPad ובדסקטופ. ראו Practice.md סעיף 4.
+
+on:
+  push:
+    paths:
+      - 'CRM/demo/**'
+      - 'CRM/tests/mobile/**'
+      - '.github/workflows/mobile-check.yml'
+  pull_request:
+    paths:
+      - 'CRM/demo/**'
+      - 'CRM/tests/mobile/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: CRM/tests/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Run mobile check
+        run: node mobile-check.mjs
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-screenshots
+          path: CRM/tests/mobile/screenshots
+          retention-days: 14

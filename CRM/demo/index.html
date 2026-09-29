@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Clinic Revenue OS — דמו מכירה</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -13,13 +13,13 @@
       <div class="logo">💎</div>
       <div><b>Clinic Revenue OS</b><small id="clinic-name">קליניקה לדוגמה</small></div>
     </div>
-    <button class="nav-item active" data-screen="dashboard">📊 דשבורד</button>
-    <button class="nav-item" data-screen="leads">🧲 לידים</button>
-    <button class="nav-item" data-screen="tasks">✅ משימות ופולואפ <span class="badge">0</span></button>
-    <button class="nav-item" data-screen="calendar">📅 יומן וייעוצים</button>
-    <button class="nav-item" data-screen="revenue">💰 הכנסות והמרות</button>
-    <button class="nav-item" data-screen="settings">⚙️ הגדרות</button>
-    <button class="tour-launch" id="tour-launch-btn">🎯 סיור מודרך למכירה</button>
+    <button class="nav-item active" data-screen="dashboard" data-short="דשבורד"><span class="nav-ico">📊</span><span class="nav-label">דשבורד</span></button>
+    <button class="nav-item" data-screen="leads" data-short="לידים"><span class="nav-ico">🧲</span><span class="nav-label">לידים</span></button>
+    <button class="nav-item" data-screen="tasks" data-short="משימות"><span class="nav-ico">✅</span><span class="nav-label">משימות ופולואפ</span> <span class="badge">0</span></button>
+    <button class="nav-item" data-screen="calendar" data-short="יומן"><span class="nav-ico">📅</span><span class="nav-label">יומן וייעוצים</span></button>
+    <button class="nav-item" data-screen="revenue" data-short="הכנסות"><span class="nav-ico">💰</span><span class="nav-label">הכנסות והמרות</span></button>
+    <button class="nav-item" data-screen="settings" data-short="הגדרות"><span class="nav-ico">⚙️</span><span class="nav-label">הגדרות</span></button>
+    <button class="tour-launch" id="tour-launch-btn" data-short="סיור"><span class="nav-ico">🎯</span><span class="nav-label">סיור מודרך למכירה</span></button>
   </aside>
 
   <div class="main">
@@ -28,12 +28,12 @@
       <button class="btn btn-primary" id="new-lead-btn">+ ליד חדש</button>
       <span id="topbar-badge-slot" style="margin-inline-start:auto"></span>
       <div class="who" id="topbar-who-authed" style="display:none">
-        <span id="who-name"></span>
+        <span id="who-name" class="who-name"></span>
         <span class="avatar" style="background:#7c5cff" id="who-avatar"></span>
         <button class="btn btn-sm btn-ghost" id="logout-btn">התנתקות</button>
       </div>
       <div class="who" id="topbar-who-demo">
-        <span>דנה כהן · בעלת קליניקה (דמו מקומי)</span>
+        <span class="who-name">דנה כהן · בעלת קליניקה (דמו מקומי)</span>
         <span class="avatar" style="background:#7c5cff">דכ</span>
       </div>
     </div>
@@ -62,7 +62,7 @@
           <select id="filter-owner"></select>
         </div>
         <div id="kanban-wrap"><div class="kanban" id="kanban"></div></div>
-        <div id="leads-table-wrap" style="display:none"></div>
+        <div id="leads-table-wrap" class="table-scroll" style="display:none"></div>
 
         <div class="panel" id="db-leads-panel" style="display:none;margin-top:16px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
@@ -77,7 +77,7 @@
               <button class="btn btn-sm btn-primary" id="db-refresh-btn">↻ רענן</button>
             </div>
           </div>
-          <div id="db-leads-table-wrap" style="margin-top:10px;max-height:340px;overflow-y:auto"></div>
+          <div id="db-leads-table-wrap" class="table-scroll" style="margin-top:10px;max-height:340px;overflow-y:auto"></div>
         </div>
       </section>
 
