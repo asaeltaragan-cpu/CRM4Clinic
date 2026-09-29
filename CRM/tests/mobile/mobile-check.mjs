@@ -111,6 +111,25 @@ async function run() {
     check(tour, 'tour card inside viewport');
     await page.screenshot({ path: `${SHOTS}/${slug}-tour.png` });
 
+    // מצב מחובר (כמו באתר החי עם config.js): badge של Supabase + שם משתמש + התנתקות בשורה העליונה
+    await page.goto(url);
+    await page.waitForTimeout(300);
+    await page.evaluate(() => {
+      const d = document.createElement('div');
+      d.id = 'db-badge';
+      d.style.cssText = 'font-size:11px;padding:4px 10px;border-radius:20px;background:#f1f2f7;color:#6b7280;margin-inline-end:8px;white-space:nowrap;';
+      d.textContent = '🔌 מחובר ל-Supabase · 237 לידים גלויים (RLS)';
+      document.getElementById('topbar-badge-slot').appendChild(d);
+      document.getElementById('topbar-who-demo').style.display = 'none';
+      document.getElementById('topbar-who-authed').style.display = 'flex';
+      document.getElementById('who-name').textContent = 'דנה כהן · בעלת קליניקה';
+      document.getElementById('who-avatar').textContent = 'דכ';
+    });
+    const authed = await page.evaluate(() => ({ h: document.querySelector('.topbar').offsetHeight, ok: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1 }));
+    check(authed.ok, 'logged-in topbar: no horizontal scroll');
+    if (mobile) check(authed.h <= 120, `logged-in topbar at most 2 rows (${authed.h}px)`);
+    await page.screenshot({ path: `${SHOTS}/${slug}-logged-in.png` });
+
     check(errors.length === 0, `no JS errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
     await ctx.close();
   }

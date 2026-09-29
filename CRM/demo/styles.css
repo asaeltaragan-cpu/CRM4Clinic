@@ -256,7 +256,10 @@ table.data-table tr:hover td { background:#f9f9fc; cursor:pointer; }
   .topbar input[type=search] { order:10; flex:1 1 100%; max-width:none; }
   #new-lead-btn { white-space:nowrap; }
   .topbar .who-name { display:none; }
-  .topbar .who { gap:6px; }
+  .topbar .who { gap:6px; margin-inline-start:0; }
+  #topbar-badge-slot { flex:1 1 0; min-width:0; display:flex; }
+  #db-badge { overflow:hidden; text-overflow:ellipsis; min-width:0; margin-inline-end:0 !important; }
+  #logout-btn { padding:6px 8px; }
 
   /* 16px prevents iOS auto-zoom on focus */
   input, select, textarea { font-size:16px !important; }
