@@ -540,30 +540,63 @@
   // ברגע שיש session אמיתי, קוראים ישירות מהטבלאות עם ה-session של המשתמש —
   // RLS דואג לבידוד. שתי הפונקציות (sync-apify-leads / sync-osm-leads)
   // נשארות רק לכתיבה (POST) — מריצות סנכרון חדש מול המקור החיצוני.
-  const dbState = { stages: [], sources: [], leads: [] };
+  const dbState = { stages: [], sources: [], leads: [], total: 0, loadedAt: null };
   const dbFilters = { source: '' };
 
   function fmtSyncTime(d) {
     if (!d) return 'מעולם לא';
     return new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
-  async function loadDbLeadsData() {
+  async function loadDbLeadsData({ manual = false } = {}) {
     const sb = window.supabaseClient;
-    const [{ data: stages }, { data: sources }, { data: leads }, { data: logs }] = await Promise.all([
+    const results = await Promise.all([
       sb.from('pipeline_stages').select('id, name, position').order('position'),
       sb.from('lead_sources').select('id, name'),
-      sb.from('leads').select('id, full_name, phone, notes, stage_id, source_id, created_at, expected_value').order('created_at', { ascending: false }).limit(300),
+      sb.from('leads').select('id, full_name, phone, notes, stage_id, source_id, created_at, expected_value', { count: 'exact' }).order('created_at', { ascending: false }).limit(300),
       sb.from('sync_logs').select('source, started_at, finished_at, status, leads_upserted').order('started_at', { ascending: false }).limit(10),
     ]);
+    // שאילתה שנכשלה (session פג, RLS, רשת) לא מוחקת את מה שכבר מוצג — מדווחים ועוצרים
+    const failed = results.find(r => r.error);
+    if (failed) {
+      toast('שגיאת רענון מה-DB: ' + (failed.error.message || failed.error), 6000);
+      return false;
+    }
+    const [{ data: stages }, { data: sources }, { data: leads, count }, { data: logs }] = results;
+    const prevIds = new Set(dbState.leads.map(l => l.id));
+    const hadData = dbState.loadedAt != null;
     dbState.stages = stages || [];
     dbState.sources = sources || [];
     dbState.leads = leads || [];
+    dbState.total = count ?? dbState.leads.length;
+    dbState.loadedAt = new Date();
     const lastGmaps = (logs || []).find(l => l.source === 'apify_google_maps');
     const lastOsm = (logs || []).find(l => l.source === 'osm_overpass');
     const part = (label, l) => l ? `${label}: ${fmtSyncTime(l.finished_at || l.started_at)}${l.status === 'success' ? ` (${l.leads_upserted} חדשים)` : l.status === 'error' ? ' — שגיאה' : ' — רץ...'}` : `${label}: מעולם לא`;
-    $('#db-leads-status').textContent = `${dbState.leads.length} לידים בסה"כ · ${part('Google Maps', lastGmaps)} · ${part('OSM', lastOsm)}`;
+    const time = dbState.loadedAt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    $('#db-leads-status').textContent = `${dbState.total} לידים בסה"כ · ${part('Google Maps', lastGmaps)} · ${part('OSM', lastOsm)} · עודכן ${time}`;
+    const badge = $('#db-badge');
+    if (badge) badge.textContent = `🔌 Supabase מחובר · ${dbState.total} לידים גלויים (RLS)`;
     renderDbSourceFilterOptions();
     renderDbLeadsTable();
+    if (manual) {
+      const added = hadData ? dbState.leads.filter(l => !prevIds.has(l.id)).length : 0;
+      toast(added
+        ? `✔ רוענן: ${dbState.total} לידים · ${added} חדשים מאז הרענון הקודם`
+        : `✔ רוענן: אין שינוי מאז הרענון הקודם (${dbState.total} לידים). לידים חדשים מגיעים מכפתורי הסנכרון`, 4000);
+    }
+    return true;
+  }
+  async function refreshDbLeads() {
+    const btn = $('#db-refresh-btn');
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '↻ מרענן...';
+    try {
+      await loadDbLeadsData({ manual: true });
+    } catch (e) {
+      toast('שגיאת רענון מה-DB: ' + (e.message || e), 6000);
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
   }
   function renderDbSourceFilterOptions() {
     const sel = $('#db-source-filter');
@@ -630,7 +663,7 @@
     $('#db-leads-panel').style.display = 'block';
     $('#gmaps-sync-btn').onclick = () => runDbSync('sync-apify-leads', 'Google Maps', 'gmaps-sync-btn');
     $('#osm-sync-btn').onclick = () => runDbSync('sync-osm-leads', 'OpenStreetMap', 'osm-sync-btn');
-    $('#db-refresh-btn').onclick = () => loadDbLeadsData();
+    $('#db-refresh-btn').onclick = refreshDbLeads;
     $('#db-source-filter').onchange = (e) => { dbFilters.source = e.target.value; renderDbLeadsTable(); };
     loadDbLeadsData();
   }
