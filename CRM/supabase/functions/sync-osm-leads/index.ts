@@ -61,7 +61,8 @@ async function fetchOverpass(): Promise<any[]> {
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
+        // Overpass דוחה (429) בקשות בלי User-Agent מזהה
+        headers: { 'Content-Type': 'text/plain', 'User-Agent': 'CRM4Clinic/1.0 (+https://github.com/asaeltaragan-cpu/CRM4Clinic)' },
         body: OVERPASS_QUERY,
         signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
       });
