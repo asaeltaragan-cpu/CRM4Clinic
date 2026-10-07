@@ -22,23 +22,22 @@ const CLINIC_SLUG = 'crm4clinic-demo';
 const SOURCE_NAME = 'OpenStreetMap';
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
 ];
 
 // עסקי יופי/בריאות אסתטית בישראל — תיוגי OSM רלוונטיים
 // timeout נמוך + הגבלת תוצאות בכוונה: Supabase Edge Functions מגבילות זמן
 // ריצה, ושרתי Overpass הציבוריים יכולים להיות איטיים — עדיף להיכשל מהר
 // ולעבור ל-mirror הבא מאשר לתקוע את הפונקציה עד שהיא נחתכת (WORKER_RESOURCE_LIMIT).
-const OVERPASS_TIMEOUT_MS = 15000;
+const OVERPASS_TIMEOUT_MS = 25000;
+const OVERPASS_ATTEMPTS = 5; // 504 "server busy" חוזר מהר ולרוב עובר בניסיון חוזר
 const OVERPASS_QUERY = `
-[out:json][timeout:12];
-area["ISO3166-1"="IL"][admin_level=2]->.il;
+[out:json][timeout:25][bbox:29.4,34.2,33.4,35.9];
 (
-  nwr["shop"="beauty"](area.il);
-  nwr["healthcare"="dermatologist"](area.il);
-  nwr["healthcare"="plastic_surgeon"](area.il);
-  nwr["amenity"="spa"](area.il);
-  nwr["leisure"="spa"](area.il);
+  nwr["shop"="beauty"];
+  nwr["healthcare"="dermatologist"];
+  nwr["healthcare"="plastic_surgeon"];
+  nwr["amenity"="spa"];
+  nwr["leisure"="spa"];
 );
 out center tags 80;
 `;
@@ -57,21 +56,24 @@ function addressOf(tags: Record<string, string>): string {
 
 async function fetchOverpass(): Promise<any[]> {
   let lastErr: unknown;
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        // Overpass דוחה (429) בקשות בלי User-Agent מזהה
-        headers: { 'Content-Type': 'text/plain', 'User-Agent': 'CRM4Clinic/1.0 (+https://github.com/asaeltaragan-cpu/CRM4Clinic)' },
-        body: OVERPASS_QUERY,
-        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
-      });
-      if (!res.ok) throw new Error(`Overpass HTTP ${res.status}: ${await res.text()}`);
-      const json = await res.json();
-      return json.elements || [];
-    } catch (e) {
-      lastErr = e;
+  for (let attempt = 0; attempt < OVERPASS_ATTEMPTS; attempt++) {
+    for (const endpoint of OVERPASS_ENDPOINTS) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          // Overpass דוחה (429) בקשות בלי User-Agent מזהה
+          headers: { 'Content-Type': 'text/plain', 'User-Agent': 'CRM4Clinic/1.0 (+https://github.com/asaeltaragan-cpu/CRM4Clinic)' },
+          body: OVERPASS_QUERY,
+          signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
+        });
+        if (!res.ok) throw new Error(`Overpass HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        const json = await res.json();
+        return json.elements || [];
+      } catch (e) {
+        lastErr = e;
+      }
     }
+    await new Promise((r) => setTimeout(r, 3000));
   }
   throw lastErr;
 }
