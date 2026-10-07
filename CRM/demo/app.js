@@ -171,7 +171,7 @@
     }).join('');
     $('#leads-table-wrap').innerHTML = `
       <table class="data-table">
-        <thead><tr><th>שם</th><th>טלפון</th><th>מקור</th><th>שלב</th><th>אחראי/ת</th><th>פעולה הבאה</th><th>שווי</th></tr></thead>
+        <thead><tr><th>שם</th><th>טלפון</th><th>מקור</th><th>קמפיין</th><th>שלב</th><th>אחראי/ת</th><th>פעולה הבאה</th><th>שווי</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
     $$('#leads-table-wrap tbody tr').forEach(tr => tr.addEventListener('click', () => openLeadModal(tr.dataset.id)));
@@ -552,7 +552,7 @@
     const [{ data: stages, error: e1 }, { data: sources, error: e2 }, { data: leads, error: e3 }, { data: logs }] = await Promise.all([
       sb.from('pipeline_stages').select('id, name, position').order('position'),
       sb.from('lead_sources').select('id, name'),
-      sb.from('leads').select('id, full_name, phone, notes, stage_id, source_id, created_at, expected_value').order('created_at', { ascending: false }).limit(300),
+      sb.from('leads').select('id, full_name, phone, notes, campaign, stage_id, source_id, created_at, expected_value').order('created_at', { ascending: false }).limit(5000),
       sb.from('sync_logs').select('source, started_at, finished_at, status, leads_upserted').order('started_at', { ascending: false }).limit(10),
     ]);
     const loadErr = e1 || e2 || e3;
@@ -581,16 +581,17 @@
     const leads = dbFilters.source ? dbState.leads.filter(l => l.source_id === dbFilters.source) : dbState.leads;
     $('#db-leads-table-wrap').innerHTML = `
       <table class="data-table">
-        <thead><tr><th>שם</th><th>טלפון</th><th>מקור</th><th>שלב</th><th>שווי</th><th>נוצר</th></tr></thead>
+        <thead><tr><th>שם</th><th>טלפון</th><th>מקור</th><th>קמפיין</th><th>שלב</th><th>שווי</th><th>נוצר</th></tr></thead>
         <tbody>${leads.map(l => `
           <tr>
             <td>${l.full_name}</td>
             <td>${l.phone}</td>
             <td><span class="pill" style="background:#eaf0ff;color:var(--blue)">${sourceName(l.source_id)}</span></td>
+            <td>${l.campaign || '—'}</td>
             <td><select data-lead="${l.id}" class="db-stage-select">${dbState.stages.map(s => `<option value="${s.id}" ${s.id === l.stage_id ? 'selected' : ''}>${s.name}</option>`).join('')}</select></td>
             <td>${l.expected_value ? fmtMoney(l.expected_value) : '—'}</td>
             <td>${fmtDate(l.created_at)}</td>
-          </tr>`).join('') || `<tr><td colspan="6"><div class="empty-hint">${dbFilters.source ? 'אין לידים מהמקור הזה' : 'אין עדיין לידים ב-DB'}</div></td></tr>`}</tbody>
+          </tr>`).join('') || `<tr><td colspan="7"><div class="empty-hint">${dbFilters.source ? 'אין לידים מהמקור הזה' : 'אין עדיין לידים ב-DB'}</div></td></tr>`}</tbody>
       </table>`;
     $$('#db-leads-table-wrap .db-stage-select').forEach((sel) => sel.addEventListener('change', async () => {
       const { error } = await window.supabaseClient.from('leads').update({ stage_id: sel.value }).eq('id', sel.dataset.lead);
