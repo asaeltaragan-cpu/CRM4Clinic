@@ -549,12 +549,14 @@
   }
   async function loadDbLeadsData() {
     const sb = window.supabaseClient;
-    const [{ data: stages }, { data: sources }, { data: leads }, { data: logs }] = await Promise.all([
+    const [{ data: stages, error: e1 }, { data: sources, error: e2 }, { data: leads, error: e3 }, { data: logs }] = await Promise.all([
       sb.from('pipeline_stages').select('id, name, position').order('position'),
       sb.from('lead_sources').select('id, name'),
       sb.from('leads').select('id, full_name, phone, notes, stage_id, source_id, created_at, expected_value').order('created_at', { ascending: false }).limit(300),
       sb.from('sync_logs').select('source, started_at, finished_at, status, leads_upserted').order('started_at', { ascending: false }).limit(10),
     ]);
+    const loadErr = e1 || e2 || e3;
+    if (loadErr) throw new Error(loadErr.message);
     dbState.stages = stages || [];
     dbState.sources = sources || [];
     dbState.leads = leads || [];
@@ -646,9 +648,15 @@
     $('#db-leads-panel').style.display = 'block';
     $('#gmaps-sync-btn').onclick = () => runDbSync('sync-apify-leads', 'Google Maps', 'gmaps-sync-btn');
     $('#osm-sync-btn').onclick = () => runDbSync('sync-osm-leads', 'OpenStreetMap', 'osm-sync-btn');
-    $('#db-refresh-btn').onclick = () => loadDbLeadsData();
+    $('#db-refresh-btn').onclick = async () => {
+      const btn = $('#db-refresh-btn'); const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '↻ טוען...';
+      try { await loadDbLeadsData(); toast(`הרשימה עודכנה ✔ (${dbState.leads.length} לידים)`); }
+      catch (e) { toast('שגיאת רענון: ' + (e.message || e), 6000); }
+      finally { btn.disabled = false; btn.textContent = orig; }
+    };
     $('#db-source-filter').onchange = (e) => { dbFilters.source = e.target.value; renderDbLeadsTable(); };
-    loadDbLeadsData();
+    loadDbLeadsData().catch((e) => toast("שגיאת טעינת לידים: " + (e.message || e), 6000));
   }
   function teardownDbLeadsPanel() {
     $('#db-leads-panel').style.display = 'none';
