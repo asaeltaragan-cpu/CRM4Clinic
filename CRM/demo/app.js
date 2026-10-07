@@ -595,6 +595,18 @@
       toast(error ? 'שגיאת עדכון: ' + error.message : 'השלב עודכן ✔ (כתיבה אמיתית ל-DB)');
     }));
   }
+  const OVERPASS_QUERY = '[out:json][timeout:25][bbox:29.4,34.2,33.4,35.9];(nwr["shop"="beauty"];nwr["healthcare"="dermatologist"];nwr["healthcare"="plastic_surgeon"];nwr["amenity"="spa"];nwr["leisure"="spa"];);out center tags 80;';
+  async function fetchOverpassElements() {
+    let lastErr;
+    for (let i = 0; i < 5; i++) {
+      try {
+        const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: OVERPASS_QUERY });
+        if (!r.ok) throw new Error('Overpass HTTP ' + r.status);
+        return (await r.json()).elements || [];
+      } catch (e) { lastErr = e; await new Promise((res) => setTimeout(res, 2000)); }
+    }
+    throw lastErr;
+  }
   async function runDbSync(functionName, label, btnId) {
     const btn = $('#' + btnId);
     const orig = btn.textContent;
@@ -604,12 +616,16 @@
       const url = window.SUPABASE_FUNCTION_URL(functionName);
       const { data: { session } } = await window.supabaseClient.auth.getSession();
       const notDeployedMsg = `הפונקציה "${functionName}" עדיין לא פרוסה בסופאבייס (או שאין רשת). הריצו: supabase functions deploy ${functionName} (ראו CRM/supabase/README.md שלב 5).`;
+      const headers = { Authorization: 'Bearer ' + (session ? session.access_token : cfg.anonKey), apikey: cfg.anonKey };
+      let reqBody;
+      if (functionName === 'sync-osm-leads') {
+        // Overpass חוסם את שרתי Supabase — שולפים מהדפדפן ושולחים לפונקציה לשמירה
+        reqBody = JSON.stringify({ elements: await fetchOverpassElements() });
+        headers['Content-Type'] = 'application/json';
+      }
       let res;
       try {
-        res = await fetch(url, {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + (session ? session.access_token : cfg.anonKey), apikey: cfg.anonKey },
-        });
+        res = await fetch(url, { method: 'POST', headers, body: reqBody });
       } catch (networkErr) {
         // פונקציה שלא פרוסה מחזירה 404 ברמת הפלטפורמה בלי CORS headers —
         // הדפדפן חוסם את זה כ-"Failed to fetch" בלי לחשוף סטטוס כלל.

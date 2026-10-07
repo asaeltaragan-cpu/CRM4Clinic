@@ -100,7 +100,14 @@ Deno.serve(async (req) => {
     .select().single();
 
   try {
-    const elements = await fetchOverpass();
+    // Overpass חוסם (406) את כתובות ה-IP של Supabase, אז הדמו שולף את הנתונים
+    // מהדפדפן ושולח אותם ב-body ({ elements }). בלי body — ננסה לשלוף בעצמנו.
+    let elements: any[] | null = null;
+    try {
+      const body = await req.json();
+      if (Array.isArray(body?.elements)) elements = body.elements.slice(0, 200);
+    } catch (_) { /* אין body */ }
+    if (!elements) elements = await fetchOverpass();
 
     const { data: source } = await supabase
       .from('lead_sources').select('id').eq('clinic_id', clinicId).eq('name', SOURCE_NAME).single();
